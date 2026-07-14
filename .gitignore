@@ -1,0 +1,49 @@
+# Dependencies
+/node_modules
+/__pycache__
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+.conda/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Build outputs
+/dist
+/build
+*.tsbuildinfo
+
+# Docker
+docker-compose.override.yml
+
+# Misc
+.Testerrors.html
+*_LoadResults.tmp

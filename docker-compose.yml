@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: apexos_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: apexos
+      POSTGRES_USER: apexos_user
+      POSTGRES_PASSWORD: apexos_pass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend service (to be implemented)
+  # backend:
+  #   build: ./backend
+  #   container_name: apexos_backend
+  #   restart: unless-stopped
+  #   env_file:
+  #     - ./backend/.env
+  #   volumes:
+  #     - ./backend:/app
+  #   ports:
+  #     - "8000:8000"
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+
+  # Frontend service (to be implemented)
+  # frontend:
+  #   build: ./frontend
+  #   container_name: apexos_frontend
+  #   restart: unless-stopped
+  #   volumes:
+  #     - ./frontend:/app
+  #     - /app/node_modules
+  #   ports:
+  #     - "3000:3000"
+  #   depends_on:
+  #     - backend
+
+volumes:
+  postgres_data:

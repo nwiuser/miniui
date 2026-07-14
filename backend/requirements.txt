@@ -1,0 +1,25 @@
+# Web Framework
+fastapi==0.104.0
+uvicorn[standard]==0.24.0
+
+# Database
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
+alembic==1.13.1
+
+# Pydantic
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# Utilities
+python-dotenv==1.0.0
+python-multipart==0.0.6
+
+# Testing
+pytest==7.4.3
+httpx==0.25.2
+
+# Development
+black==23.9.1
+isort==5.12.0
+flake8==6.1.0
