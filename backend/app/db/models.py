@@ -1,6 +1,6 @@
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, JSON, Index
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm relationship
+from sqlalchemy.orm import relationship
 from datetime import datetime
 
 Base = declarative_base()
@@ -90,18 +90,102 @@ class PageProcess(Base):
     # Relationships
     page = relationship("Page", back_populates="processes")
 
-class SessionState(Base):
-    __tablename__ = "apex_session_state"
-    
+class Session(Base):
+    __tablename__ = "apex_sessions"
+
     id = Column(Integer, primary_key=True, index=True)
-    session_id = Column(String(255), nullable=False, index=True)
+    session_id = Column(String(255), unique=True, nullable=False, index=True)
+    application_id = Column(Integer, ForeignKey("apex_applications.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("apex_workspace_users.id"), nullable=True)
+    expires_at = Column(DateTime, nullable=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    application = relationship("Application")
+    user = relationship("WorkspaceUser")
+    items = relationship("SessionStateItem", back_populates="session", cascade="all, delete-orphan")
+
+
+class SessionStateItem(Base):
+    __tablename__ = "apex_session_state"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(Integer, ForeignKey("apex_sessions.id"), nullable=False)
     page_id = Column(Integer, nullable=False, index=True)
     item_name = Column(String(255), nullable=False)  # e.g., P1_FIELD_NAME
     item_value = Column(Text)  # Stored as string, application handles type conversion
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
-    # Ensure unique session/item combination
+
+    # Relationships
+    session = relationship("Session", back_populates="items")
+
+    # Ensure unique session/page/item combination
     __table_args__ = (
-        Index('ux_session_item', 'session_id', 'item_name', unique=True),
+        Index('ux_session_page_item', 'session_id', 'page_id', 'item_name', unique=True),
     )
+
+
+class Validation(Base):
+    __tablename__ = "apex_validations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    page_id = Column(Integer, ForeignKey("apex_pages.id"), nullable=False)
+    item_name = Column(String(255), nullable=False)  # The item this validation applies to (e.g., P1_FIELD_NAME)
+    validation_type = Column(String(50), nullable=False)  # NOT_NULL, VALIDATION, SQL_COMPARISON, etc.
+    validation_expression = Column(Text)  # The validation logic (SQL, PL/SQL, or literal)
+    error_message = Column(String(4000))  # Error message to display when validation fails
+    when_button_pressed = Column(String(255))  # Optional: button that triggers this validation
+    condition_type = Column(String(255))  # Condition type (e.g., 'VAL_NOT_NULL')
+    condition_expression = Column(Text)  # Condition expression
+    is_active = Column(Boolean, default=True)
+    sequence = Column(Integer, default=1)  # Order of execution
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    page = relationship("Page")
+
+
+class Lov(Base):
+    __tablename__ = "apex_lovs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    lov_name = Column(String(255), unique=True, nullable=False)  # Unique name for the LOV
+    lov_definition = Column(Text)  # SQL query or static values definition
+    is_static = Column(Boolean, default=False)  # True for static LOVs, False for SQL-based
+    display_extra = Column(Boolean, default=True)  # Show extra options
+    translation_applicable = Column(Boolean, default=False)
+    is_translatable = Column(Boolean, default=False)
+    static_values = Column(Text)  # For static LOVs: "STATIC2:Value1;Display1,Value2;Display2"
+    is_enterable = Column(Boolean, default=False)  # Whether users can enter custom values
+    show_null_value = Column(Boolean, default=False)  # Show null option
+    null_text = Column(String(255))  # Text for null option
+    null_value = Column(String(255))  # Value for null option
+    apex_item_height = Column(Integer)  # Height for textarea/LOV
+    apex_item_width = Column(Integer)   # Width for textarea/LOV
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class WorkspaceUser(Base):
+    __tablename__ = "apex_workspace_users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(255), unique=True, nullable=False)
+    password_hash = Column(String(255), nullable=False)  # Hashed password
+    first_name = Column(String(255))
+    last_name = Column(String(255))
+    email = Column(String(255), unique=True)
+    administrator_role = Column(String(50))  # e.g., 'ADMIN', 'DEVELOPER', 'END_USER'
+    account_expiry_date = Column(DateTime)
+    account_locked = Column(Boolean, default=False)
+    failed_access_attempts = Column(Integer, default=0)
+    change_password_on_first_use = Column(Boolean, default=False)
+    first_name_phonetic = Column(String(255))
+    last_name_phonetic = Column(String(255))
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
