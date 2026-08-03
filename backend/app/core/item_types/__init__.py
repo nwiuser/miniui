@@ -6,6 +6,7 @@ from .radio import render_radio_item
 from .date_picker import render_date_picker_item
 from .display_only import render_display_only_item
 from .hidden import render_hidden_item
+from .password import render_password_item
 
 __all__ = [
     "render_text_item",
@@ -15,5 +16,6 @@ __all__ = [
     "render_radio_item",
     "render_date_picker_item",
     "render_display_only_item",
-    "render_hidden_item"
+    "render_hidden_item",
+    "render_password_item"
 ]

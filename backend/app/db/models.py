@@ -37,6 +37,7 @@ class Page(Base):
     regions = relationship("Region", back_populates="page", cascade="all, delete-orphan")
     items = relationship("PageItem", back_populates="page", cascade="all, delete-orphan")
     processes = relationship("PageProcess", back_populates="page", cascade="all, delete-orphan")
+    computations = relationship("Computation", back_populates="page", cascade="all, delete-orphan")
 
 class Region(Base):
     __tablename__ = "apex_regions"
@@ -189,3 +190,23 @@ class WorkspaceUser(Base):
     last_name_phonetic = Column(String(255))
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class Computation(Base):
+    __tablename__ = "apex_computations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    page_id = Column(Integer, ForeignKey("apex_pages.id"), nullable=False)
+    computation_point = Column(String(20), nullable=False)  # ON_NEW_INSTANCE, ON_LOAD, BEFORE_HEADER, AFTER_HEADER, BEFORE_FOOTER, AFTER_FOOTER, BEFORE_BOX_BODY
+    computation_type = Column(String(20), nullable=False)  # STATIC_ASSIGNMENT, SQL_QUERY, PLSQL_FUNCTION_BODY, PLSQL_EXPRESSION
+    computation_item = Column(String(255), nullable=False)  # The item to set (e.g., 'P1_SALARY')
+    computation_value = Column(Text)  # The value or query/expression
+    computation_condition_type = Column(String(255))  # Condition type (e.g., 'VAL_NOT_NULL')
+    computation_condition_expression = Column(Text)  # Condition expression
+    sequence = Column(Integer, default=1)  # Order of execution
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    page = relationship("Page", back_populates="computations")

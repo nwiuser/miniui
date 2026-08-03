@@ -5,6 +5,7 @@ Handles getting, setting, and managing session state values for applications.
 from datetime import datetime, timedelta
 from typing import Optional, Any, Dict, List
 import uuid
+import time
 
 from sqlalchemy.orm import Session
 from ...db import models
@@ -16,6 +17,23 @@ class SessionService:
 
     def __init__(self, db: Session):
         self.db = db
+        self.last_cleanup = None
+
+    def _periodic_cleanup(self):
+        """
+        Periodically clean up expired sessions (at most once per hour).
+        """
+        # Initialize last_cleanup if it's None
+        if self.last_cleanup is None:
+            self.last_cleanup = datetime.utcnow()
+            return
+
+        # Check if it's been more than 1 hour since last cleanup
+        if datetime.utcnow() - self.last_cleanup > timedelta(hours=1):
+            # Run cleanup
+            self.cleanup_expired_sessions()
+            # Update last cleanup time
+            self.last_cleanup = datetime.utcnow() iaitu
 
     def create_session(self, application_id: int, user_id: Optional[int] = None) -> str:
         """
@@ -53,6 +71,9 @@ class SessionService:
         Returns:
             Session object if found and not expired, None otherwise
         """
+        # Periodically clean up expired sessions (at most once per hour)
+        self._periodic_cleanup()
+
         session = self.db.query(models.Session).filter(
             models.Session.session_id == session_id,
             models.Session.is_active == True,

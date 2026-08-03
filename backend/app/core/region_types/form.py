@@ -6,6 +6,7 @@ from typing import List
 from sqlalchemy.orm import Session
 
 from ...db import models
+from ..session.service import SessionService
 from ..item_types import (
     render_text_item,
     render_textarea_item,
@@ -14,11 +15,12 @@ from ..item_types import (
     render_radio_item,
     render_date_picker_item,
     render_display_only_item,
-    render_hidden_item
+    render_hidden_item,
+    render_password_item
 )
 
 
-def form_region(region: models.Region, db: Session, session_id: str, page_id: int) -> str:
+def form_region(region: models.Region, db: Session, session_id: str, page_id: int, session_service: SessionService = None) -> str:
     """
     Render a form region containing form items.
 
@@ -27,10 +29,14 @@ def form_region(region: models.Region, db: Session, session_id: str, page_id: in
         db: Database session
         session_id: The current session ID
         page_id: The current page ID
+        session_service: Optional SessionService instance; if None, a new one is created.
 
     Returns:
         HTML string containing the form with all its items
     """
+    if session_service is None:
+        session_service = SessionService(db)
+
     # Get all items for this region/position
     # In a real APEX, items belong to pages, not regions directly
     # But for simplicity, we'll get all items for the page and let the template
@@ -57,7 +63,7 @@ def form_region(region: models.Region, db: Session, session_id: str, page_id: in
 
     # Render each item
     for item in page_items:
-        item_html = _render_form_item(item, db, session_id, page_id)
+        item_html = _render_form_item(item, db, session_id, page_id, session_service)
         if item_html:
             html_parts.append(f"      <div class='form-item-group' data-item-id='{item.id}'>")
             html_parts.append(f"        {item_html}")
@@ -77,16 +83,11 @@ def form_region(region: models.Region, db: Session, session_id: str, page_id: in
     return "\n".join(html_parts)
 
 
-def _render_form_item(item: 'PageItem', db: Session, session_id: str, page_id: int) -> str:
+def _render_form_item(item: 'PageItem', db: Session, session_id: str, page_id: int, session_service: SessionService) -> str:
     """Render a single form item based on its type."""
     item_type = item.item_type.lower()
 
     # Get the current value from session state
-    from ..session.service import SessionService
-    # We need to create a session service to get the value
-    # This is not ideal - we should pass the session service in
-    from sqlalchemy.orm import Session
-    session_service = SessionService(db)
     current_value = session_service.get_item(session_id, page_id, item.name)
 
     # Use the current value if available, otherwise use the default
@@ -108,6 +109,8 @@ def _render_form_item(item: 'PageItem', db: Session, session_id: str, page_id: i
         return render_display_only_item(item, value_to_use)
     elif item_type == "hidden":
         return render_hidden_item(item, value_to_use)
+    elif item_type == "password":
+        return render_password_item(item, value_to_use)
     else:
         # Unknown item type - render as text input for safety
         return render_text_item(item, value_to_use)
