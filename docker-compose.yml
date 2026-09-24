@@ -18,33 +18,38 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-  # Backend service (to be implemented)
-  # backend:
-  #   build: ./backend
-  #   container_name: apexos_backend
-  #   restart: unless-stopped
-  #   env_file:
-  #     - ./backend/.env
-  #   volumes:
-  #     - ./backend:/app
-  #   ports:
-  #     - "8000:8000"
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
+  # Backend service
+  backend:
+    build: ./backend
+    container_name: apexos_backend
+    restart: unless-stopped
+    environment:
+      # Use the compose service name ('postgres') as the DB host, not 'localhost'
+      DATABASE_URL: postgresql://apexos_user:apexos_pass@postgres:5432/apexos
+    volumes:
+      - ./backend:/app
+      - ./scripts:/app/scripts
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
 
-  # Frontend service (to be implemented)
-  # frontend:
-  #   build: ./frontend
-  #   container_name: apexos_frontend
-  #   restart: unless-stopped
-  #   volumes:
-  #     - ./frontend:/app
-  #     - /app/node_modules
-  #   ports:
-  #     - "3000:3000"
-  #   depends_on:
-  #     - backend
+  # Frontend service
+  frontend:
+    build: ./frontend
+    container_name: apexos_frontend
+    restart: unless-stopped
+    environment:
+      # Backend base URL as seen from the compose network (host 'backend', port 8000)
+      BACKEND_URL: http://backend:8000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
 
 volumes:
   postgres_data:

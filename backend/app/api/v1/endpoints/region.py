@@ -5,10 +5,11 @@ Handles HTTP requests for region management.
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from .. import models, schemas
-from ..db.session import get_db
-from .. import crud
-from ..core.auth import require_role, application_access_required, get_current_user
+from .... import schemas
+from ....db import models
+from ....db.session import get_db
+from .... import crud
+from ....core.auth import require_role, application_access_required, get_current_user
 
 
 router = APIRouter(
@@ -81,7 +82,7 @@ def create_region(region: schemas.RegionCreate, db: Session = Depends(get_db), c
     # Check if the region specifies a page_id
     if region.page_id:
         # Get the page to verify it exists and get its application_id
-        from .. import crud
+        from .... import crud
         page = crud.get_page(db, page_id=region.page_id)
         if not page:
             raise HTTPException(status_code=404, detail="Page not found")

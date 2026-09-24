@@ -80,6 +80,12 @@ class RenderingService:
                 detail=f"Page {page_number} not found in application '{application_alias}'"
             )
 
+        # Get all computations for this page
+        page_computations = self.db.query(models.Computation).filter(
+            models.Computation.page_id == page.id,
+            models.Computation.is_active == True
+        ).order_by(models.Computation.sequence).all()
+
         # Get or create session
         if not session_id:
             session_id = self.session_service.create_session(application.id)
@@ -112,12 +118,6 @@ class RenderingService:
             models.PageProcess.is_active == True,
             models.PageProcess.execution_point == "ON_LOAD"  # Processes that run on page load
         ).order_by(models.PageProcess.execution_sequence).all()
-
-        # Get all computations for this page
-        page_computations = self.db.query(models.Computation).filter(
-            models.Computation.page_id == page.id,
-            models.Computation.is_active == True
-        ).order_by(models.Computation.sequence).all()
 
         # Execute ON_LOAD processes
         self._execute_processes(page_processes, session_id, page.id)
@@ -391,7 +391,8 @@ class RenderingService:
         """Execute a PL/SQL process (simulated with Python code execution).
 
         WARNING: This executes arbitrary code from the database. In a production
-        environment, this should be restricted to prevent security vulnerabilities.
+        environment, this should be heavily restricted or use a sandboxed environment.
+        SECURITY: Only basic operations are allowed - no file I/O, no network, no imports.
         """
         if not process.process_code:
             return
@@ -400,14 +401,17 @@ class RenderingService:
         code = self._substitute_strings(process.process_code, session_id, page_id)
 
         try:
-            # Execute the PL/SQL code as Python
-            # NOTE: This is potentially dangerous! In a real implementation,
-            # you would want to restrict what code can be executed or use a sandbox.
+            # Restricted globals - only safe builtins and limited db access
+            safe_builtins = {
+                'str': str, 'int': int, 'float': float, 'bool': bool,
+                'len': len, 'range': range, 'print': print,
+                'True': True, 'False': False, 'None': None,
+            }
             exec_globals = {
+                '__builtins__': safe_builtins,
                 'session_id': session_id,
                 'page_id': page_id,
-                'db': self.db,
-                'session_service': self.session_service
+                'session_service': self.session_service,
             }
             exec_locals = {}
 
@@ -417,8 +421,6 @@ class RenderingService:
             # Commit any changes
             self.db.commit()
         except Exception as e:
-            # In a real implementation, you'd log this error
-            # For now, we'll just raise it
             raise Exception(f"Error executing PL/SQL process '{process.name}': {str(e)}")
 
     def _execute_computations(
@@ -522,33 +524,29 @@ class RenderingService:
         session_id: str,
         page_id: int
     ):
-        """Execute a PL/SQL computation (similar to PL/SQL process)."""
+        """Execute a PL/SQL computation (restricted Python execution)."""
         if not computation.computation_value:
             return
 
-        # Replace substitution strings in the PL/SQL code
         code = self._substitute_strings(computation.computation_value, session_id, page_id)
 
         try:
-            # Execute the PL/SQL code as Python
-            # NOTE: This is potentially dangerous! In a real implementation,
-            # you would want to restrict what code can be executed or use a sandbox.
+            safe_builtins = {
+                'str': str, 'int': int, 'float': float, 'bool': bool,
+                'len': len, 'range': range, 'print': print,
+                'True': True, 'False': False, 'None': None,
+            }
             exec_globals = {
+                '__builtins__': safe_builtins,
                 'session_id': session_id,
                 'page_id': page_id,
-                'db': self.db,
-                'session_service': self.session_service
+                'session_service': self.session_service,
             }
             exec_locals = {}
 
-            # Execute the code
             exec(code, exec_globals, exec_locals)
-
-            # Commit any changes
             self.db.commit()
         except Exception as e:
-            # In a real implementation, you'd log this error
-            # For now, we'll just raise it
             raise Exception(f"Error executing PL/SQL computation '{computation.computation_item}': {str(e)}")
 
     def _reset_pagination(
@@ -810,6 +808,8 @@ class RenderingService:
 
     def _substitute_strings(self, text: str, session_id: str, page_id: int) -> str:
         """Substitute substitution strings in text with their session values."""
+        if text is None:
+            return ""
         # Common substitution strings in APEX:
         # &APP_USER., &APP_SESSION., &ITEM_NAME., etc.
 

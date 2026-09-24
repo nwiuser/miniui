@@ -6,19 +6,20 @@ Creates initial data and sets up the database.
 
 import sys
 import os
-from sqlalchemy.orm import Session
+from pathlib import Path
 
-# Add the parent directory to sys.path so we can import from app
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add the backend directory to sys.path so we can import from app
+backend_dir = Path(__file__).resolve().parent.parent / 'backend'
+sys.path.append(str(backend_dir))
 
-from app.db.session import SessionLocal, engine, Base
-from app import models
+from app.db.session import SessionLocal, engine, Base, create_tables
+from app.db import models
 
 def init_db() -> None:
     """Initialize the database with tables and initial data."""
     # Create tables
     print("Creating database tables...")
-    Base.metadata.create_all(bind=engine)
+    create_tables()  # This uses the Base from session.py
     print("Database tables created successfully!")
 
     # Create initial data

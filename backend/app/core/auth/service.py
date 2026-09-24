@@ -5,8 +5,8 @@ from datetime import datetime, timedelta
 from typing import Optional
 from sqlalchemy.orm import Session
 
-from ..db import models
-from ..core.security.password_utils import verify_password
+from ...db import models
+from ..security.password import verify_password
 from ..session.service import SessionService
 
 

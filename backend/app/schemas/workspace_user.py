@@ -2,9 +2,9 @@ from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 
+
 class WorkspaceUserBase(BaseModel):
     username: str
-    password_hash: str
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     email: Optional[str] = None
@@ -16,10 +16,12 @@ class WorkspaceUserBase(BaseModel):
     first_name_phonetic: Optional[str] = None
     last_name_phonetic: Optional[str] = None
 
-class WorkspaceUserCreate(WorkspaceUserBase):
-    pass
 
-class WorkspaceUserUpdate(WorkspaceUserBase):
+class WorkspaceUserCreate(WorkspaceUserBase):
+    password_hash: str
+
+
+class WorkspaceUserUpdate(BaseModel):
     username: Optional[str] = None
     password_hash: Optional[str] = None
     first_name: Optional[str] = None
@@ -33,10 +35,11 @@ class WorkspaceUserUpdate(WorkspaceUserBase):
     first_name_phonetic: Optional[str] = None
     last_name_phonetic: Optional[str] = None
 
+
 class WorkspaceUser(WorkspaceUserBase):
     id: int
     created_at: datetime
     updated_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True

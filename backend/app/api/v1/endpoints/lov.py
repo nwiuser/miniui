@@ -5,10 +5,11 @@ Handles HTTP requests for LOV management.
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
-from .. import models, schemas
-from ..db.session import get_db
-from .. import crud
-from ..core.auth import require_role, application_access_required, get_current_user
+from .... import schemas
+from ....db import models
+from ....db.session import get_db
+from .... import crud
+from ....core.auth import require_role, application_access_required, get_current_user
 
 
 router = APIRouter(
@@ -31,7 +32,7 @@ def read_lovs(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), cu
     else:
         # END_USER: get LOVs only from their current session's application
         if current_user.session_id:
-            from .. import crud
+            from .... import crud
             session = crud.get_session(db, session_id=current_user.session_id)
             if session and session.application_id:
                 lovs = crud.get_lovs_by_application(db, application_id=session.application_id, skip=skip, limit=limit)
@@ -52,7 +53,7 @@ def create_lov(lov: schemas.LovCreate, db: Session = Depends(get_db), current_us
     """
     # Check if LOV specifies an item_id
     if hasattr(lov, 'item_id') and lov.item_id:
-        from .. import crud
+        from .... import crud
         item = crud.get_item(db, item_id=lov.item_id)
         if not item:
             raise HTTPException(status_code=404, detail="Item not found")
@@ -84,7 +85,7 @@ def read_lov(lov_id: int, db: Session = Depends(get_db), current_user: models.Wo
 
     # If LOV has an item_id, check through item->page->application
     if hasattr(db_lov, 'item_id') and db_lov.item_id:
-        from .. import crud
+        from .... import crud
         item = crud.get_item(db, item_id=db_lov.item_id)
         if item and item.page:
             application_id = item.page.application_id
@@ -107,7 +108,7 @@ def read_lov_by_name(lov_name: str, db: Session = Depends(get_db), current_user:
     # Apply same application access logic as get_lov
     # If LOV has an item_id, check through item->page->application
     if hasattr(db_lov, 'item_id') and db_lov.item_id:
-        from .. import crud
+        from .... import crud
         item = crud.get_item(db, item_id=db_lov.item_id)
         if item and item.page:
             application_id = item.page.application_id
@@ -129,7 +130,7 @@ def update_lov(lov_id: int, lov: schemas.LovUpdate, db: Session = Depends(get_db
 
     # Apply application access check if LOV has item association
     if hasattr(db_lov, 'item_id') and db_lov.item_id:
-        from .. import crud
+        from .... import crud
         item = crud.get_item(db, item_id=db_lov.item_id)
         if item and item.page:
             application_id = item.page.application_id

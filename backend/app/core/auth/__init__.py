@@ -6,8 +6,8 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
-from ..db.session import get_db
-from .. import models
+from ...db.session import get_db
+from ...db import models
 from .service import AuthService
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
@@ -79,7 +79,7 @@ def require_role(*allowed_roles: str):
                 detail="Insufficient permissions"
             )
         return current_user
-    return Depends(role_checker)
+    return role_checker
 
 
 def application_access_required(application_id: int):
@@ -124,4 +124,49 @@ def application_access_required(application_id: int):
             )
 
         return current_user
-    return Depends(_application_access_checker)
+    return _application_access_checker
+
+
+def verify_application_access(
+    application_id: int,
+    current_user=Depends(get_current_user),
+    current_session=Depends(get_current_session),
+    db: Session = Depends(get_db),
+):
+    """
+    Path-parameter-aware dependency that enforces per-application access control.
+
+    Declares ``application_id`` so FastAPI injects the path parameter at request
+    time (a default value cannot reference another parameter). Mirrors the checks
+    in :func:`application_access_required`:
+    - ADMIN/DEVELOPER may access any application (it must exist)
+    - END_USER may only access the application bound to their current session
+    Returns the authenticated user on success.
+    """
+    if current_user.administrator_role in ["ADMIN", "DEVELOPER"]:
+        application = db.query(models.Application).filter(
+            models.Application.id == application_id
+        ).first()
+        if not application:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Application not found"
+            )
+        return current_user
+
+    if current_session.application_id != application_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied to this application"
+        )
+
+    application = db.query(models.Application).filter(
+        models.Application.id == application_id
+    ).first()
+    if not application:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Application not found"
+        )
+
+    return current_user

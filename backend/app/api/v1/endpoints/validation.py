@@ -5,10 +5,11 @@ Handles HTTP requests for validation management.
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
-from .. import models, schemas
-from ..db.session import get_db
-from .. import crud
-from ..core.auth import require_role, application_access_required, get_current_user
+from .... import schemas
+from ....db import models
+from ....db.session import get_db
+from .... import crud
+from ....core.auth import require_role, application_access_required, get_current_user
 
 
 router = APIRouter(
@@ -28,7 +29,7 @@ def read_validations(skip: int = 0, limit: int = 100, db: Session = Depends(get_
     # For END_USER, we need to filter by their application
     if current_user.administrator_role not in ["ADMIN", "DEVELOPER"]:
         # END_USER - get application from their session
-        from .. import crud
+        from .... import crud
         session = crud.get_session_by_user_and_app(db, user_id=current_user.id, is_active=True)  # Simplified
         if not session or not session.application_id:
             return []  # No active session, no access
@@ -117,7 +118,7 @@ def create_validation(validation: schemas.ValidationCreate, db: Session = Depend
     # Check if validation specifies an item_id
     if validation.item_id:
         # Get the item to check its application
-        from .. import crud
+        from .... import crud
         item = crud.get_item(db, item_id=validation.item_id)
         if not item:
             raise HTTPException(status_code=404, detail="Item not found")

@@ -253,7 +253,7 @@ function flashMessage(message, type = 'info') {
         default:
             flash.style.backgroundColor = '#d1ecf1';
             flash.style.borderColor = '#bee5eb';
-            flight.style.color = '#0c5460';
+            flash.style.color = '#0c5460';
             break;
     }
 

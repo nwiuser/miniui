@@ -6,9 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 
-from .. import crud, models, schemas
-from ..core.auth import get_current_user, require_role, application_access_required
-from ..db.session import get_db
+from .... import crud, schemas
+from ....db import models
+from ....core.auth import get_current_user, require_role, verify_application_access, get_current_session
+from ....db.session import get_db
 
 router = APIRouter(
     prefix="/applications",
@@ -45,7 +46,7 @@ def create_application(application: schemas.ApplicationCreate, db: Session = Dep
 
 
 @router.get("/{application_id}", response_model=schemas.Application)
-def read_application(application_id: int, db: Session = Depends(get_db), current_user: models.WorkspaceUser = Depends(application_access_required(application_id))):
+def read_application(application_id: int, db: Session = Depends(get_db), current_user: models.WorkspaceUser = Depends(verify_application_access)):
     """
     Get application by ID.
     """
@@ -56,7 +57,7 @@ def read_application(application_id: int, db: Session = Depends(get_db), current
 
 
 @router.put("/{application_id}", response_model=schemas.Application)
-def update_application(application_id: int, application: schemas.ApplicationUpdate, db: Session = Depends(get_db), current_user: models.WorkspaceUser = Depends(application_access_required(application_id))):
+def update_application(application_id: int, application: schemas.ApplicationUpdate, db: Session = Depends(get_db), current_user: models.WorkspaceUser = Depends(verify_application_access)):
     """
     Update an application.
     Only ADMIN and DEVELOPER roles can update applications.
@@ -68,7 +69,7 @@ def update_application(application_id: int, application: schemas.ApplicationUpda
 
 
 @router.delete("/{application_id}", response_model=schemas.Application)
-def delete_application(application_id: int, db: Session = Depends(get_db), current_user: models.WorkspaceUser = Depends(application_access_required(application_id))):
+def delete_application(application_id: int, db: Session = Depends(get_db), current_user: models.WorkspaceUser = Depends(verify_application_access)):
     """
     Delete an application.
     Only ADMIN role can delete applications.

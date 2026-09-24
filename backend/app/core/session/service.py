@@ -33,7 +33,7 @@ class SessionService:
             # Run cleanup
             self.cleanup_expired_sessions()
             # Update last cleanup time
-            self.last_cleanup = datetime.utcnow() iaitu
+            self.last_cleanup = datetime.utcnow()
 
     def create_session(self, application_id: int, user_id: Optional[int] = None) -> str:
         """

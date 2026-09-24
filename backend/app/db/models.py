@@ -1,9 +1,7 @@
 from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, JSON, Index
-from sqlalchemy.ext.declarative import declarative_base
+from .session import Base
 from sqlalchemy.orm import relationship
 from datetime import datetime
-
-Base = declarative_base()
 
 class Application(Base):
     __tablename__ = "apex_applications"

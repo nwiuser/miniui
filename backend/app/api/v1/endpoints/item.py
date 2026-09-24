@@ -5,10 +5,11 @@ Handles HTTP requests for item management.
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from .. import models, schemas
-from ..db.session import get_db
-from .. import crud
-from ..core.auth import require_role, application_access_required, get_current_user
+from .... import schemas
+from ....db import models
+from ....db.session import get_db
+from .... import crud
+from ....core.auth import require_role, application_access_required, get_current_user
 
 
 router = APIRouter(
@@ -42,7 +43,7 @@ def read_item(item_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/", response_model=schemas.Item, status_code=status.HTTP_201_CREATED)
-def create_item(item: schemas.ItemCreate, db: Session = Depends(get_db), current_user: models.WorkspaceUser = Depends(application_access_required(item.page_id))):
+def create_item(item: schemas.ItemCreate, db: Session = Depends(get_db), current_user: models.WorkspaceUser = Depends(require_role("ADMIN", "DEVELOPER"))):
     """
     Create a new item.
     Only ADMIN and DEVELOPER roles can create items.

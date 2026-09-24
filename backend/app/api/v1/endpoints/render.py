@@ -6,7 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 from typing import List
-from .... import models, schemas
+from .... import schemas
+from ....db import models
 from ....db.session import get_db
 
 router = APIRouter(tags=["render"])

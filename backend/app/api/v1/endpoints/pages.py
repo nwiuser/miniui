@@ -6,12 +6,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Form, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from typing import Optional
-from .. import models, schemas
-from ..db.session import get_db
+from .... import schemas
+from ....db import models
+from ....db.session import get_db
 from ....core.rendering.service import RenderingService
 from ....core.session.service import SessionService
-from ....core.auth import get_current_user, get_current_user_optional, require_role, application_access_required, get_current_application
-from .. import crud
+from ....core.auth import get_current_user, get_current_user_optional, require_role, application_access_required, get_current_application, verify_application_access
+from .... import crud
 
 
 router = APIRouter(
@@ -138,7 +139,7 @@ async def accept_page(
 def get_page_builder_context(
     application_id: int,
     db: Session = Depends(get_db),
-    current_user: models.WorkspaceUser = Depends(application_access_required(application_id))
+    current_user: models.WorkspaceUser = Depends(verify_application_access)
 ):
     """
     Get context for the page builder (requires ADMIN or DEVELOPER role).
@@ -162,11 +163,14 @@ def get_page_builder_context(
 def create_page_builder(
     page: schemas.PageCreate,
     db: Session = Depends(get_db),
-    current_user: models.WorkspaceUser = Depends(application_access_required(page.application_id))
+    current_user: models.WorkspaceUser = Depends(get_current_user)
 ):
     """
     Create a new page (requires ADMIN or DEVELOPER role).
     """
+    # A dependency cannot read a body sub-field, so enforce per-application
+    # access for the page's application_id here (matches existing manual checks).
+    application_access_required(page.application_id)(current_user, None, db)
     return crud.create_page(db=db, page=page)
 
 
@@ -187,15 +191,7 @@ def update_page_builder(
 
     # Check application access
     application_id = db_page.application_id
-    # Reuse the application access check
-    from ..core.auth import application_access_required
-    # Manually check access since we already have current_user
-    auth_service = AuthService(db)
-    session_service = auth_service.session_service
-    # We need to get the session from the user somehow - this is tricky
-    # Let's reuse the dependency approach but we need to adjust
-
-    # Actually, let's just check the role here since we're updating a specific page
+    # ADMIN/DEVELOPER only; verify the application still exists
     if current_user.administrator_role not in ["ADMIN", "DEVELOPER"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

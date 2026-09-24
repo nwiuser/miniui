@@ -1,4 +1,3 @@
-from pydantic schemas/page.py
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
@@ -32,4 +31,4 @@ class Page(PageBase):
     updated_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True

@@ -44,6 +44,9 @@ logs/
 # Docker
 docker-compose.override.yml
 
+# Deprecated CRA frontend (preserved in git history)
+frontend_old/
+
 # Misc
 .Testerrors.html
 *_LoadResults.tmp

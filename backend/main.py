@@ -7,6 +7,7 @@ from starlette.responses import Response
 import os
 
 from app.api import api_router
+from app.core.security.rate_limit import RateLimitMiddleware
 
 app = FastAPI(
     title="Open Source APEX Equivalent",
@@ -66,11 +67,16 @@ exempt_paths = [
     "/openapi.json",
     "/auth/login",
     "/auth/logout",
+    "/api/v1/auth/login",
+    "/api/v1/auth/logout",
     "/",  # root endpoint
 ]
 
 # Add CSRF protection middleware
 app.add_middleware(CSRFProtectionMiddleware, exempt_paths=exempt_paths)
+
+# Add rate limiting for auth endpoints
+app.add_middleware(RateLimitMiddleware, paths=["/api/v1/auth/login"])
 
 # Trusted host middleware (adjust allowed hosts as needed)
 # For development, we allow all; in production, specify your domain(s)
@@ -90,10 +96,10 @@ app.add_middleware(
 )
 
 # Mount static files
-app.mount("/static", StaticFiles(directory="backend/static"), name="static")
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Include API router
-app.include_router(api_router)
+app.include_router(api_router, prefix="/api")
 
 @app.get("/")
 async def root():
