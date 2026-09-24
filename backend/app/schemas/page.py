@@ -10,6 +10,7 @@ class PageBase(BaseModel):
     page_number: int
     description: Optional[str] = None
     is_active: Optional[bool] = True
+    is_public: Optional[bool] = False
 
 
 class PageCreate(PageBase):
@@ -23,6 +24,7 @@ class PageUpdate(PageBase):
     page_number: Optional[int] = None
     description: Optional[str] = None
     is_active: Optional[bool] = None
+    is_public: Optional[bool] = None
 
 
 class Page(PageBase):

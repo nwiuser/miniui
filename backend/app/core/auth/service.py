@@ -6,7 +6,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from ...db import models
-from ..security.password import verify_password
+from ..security.password import verify_password, get_password_hash, ensure_valid_password
 from ..session.service import SessionService
 
 
@@ -121,6 +121,73 @@ class AuthService:
             True if successful, False if session not found
         """
         return self.session_service.clear_session(session_id)
+
+    def invalidate_user_sessions(self, user_id: int, keep_session_id: Optional[str] = None) -> int:
+        """
+        Deactivate all active sessions belonging to a user.
+
+        Args:
+            user_id: The workspace user ID
+            keep_session_id: Optional session ID to leave active (e.g. current login)
+
+        Returns:
+            Number of sessions invalidated
+        """
+        query = self.db.query(models.Session).filter(
+            models.Session.user_id == user_id,
+            models.Session.is_active == True
+        )
+        if keep_session_id:
+            query = query.filter(models.Session.session_id != keep_session_id)
+
+        sessions = query.all()
+        for session in sessions:
+            session.is_active = False
+        if sessions:
+            self.db.commit()
+        return len(sessions)
+
+    def change_password(
+        self,
+        user: models.WorkspaceUser,
+        current_password: str,
+        new_password: str,
+        keep_session_id: Optional[str] = None,
+    ) -> bool:
+        """
+        Change a user's password.
+
+        Verifies the current password, enforces the password strength policy,
+        updates the stored hash, and invalidates all other active sessions for
+        the user (session invalidation on password change). Resets any failed
+        access attempt counters and clears the change-on-first-use flag.
+
+        Args:
+            user: The workspace user to update
+            current_password: The user's current plain-text password
+            new_password: The desired new plain-text password
+            keep_session_id: Optional session ID to keep active
+
+        Returns:
+            True on success
+
+        Raises:
+            ValueError: Current password is wrong, or new password is too weak
+        """
+        if not verify_password(current_password, user.password_hash):
+            raise ValueError("Current password is incorrect")
+
+        ensure_valid_password(new_password)
+
+        user.password_hash = get_password_hash(new_password)
+        user.failed_access_attempts = 0
+        user.change_password_on_first_use = False
+        user.account_locked = False
+
+        self.invalidate_user_sessions(user.id, keep_session_id=keep_session_id)
+
+        self.db.commit()
+        return True
 
     def get_current_user(self, session_id: str) -> Optional[models.WorkspaceUser]:
         """

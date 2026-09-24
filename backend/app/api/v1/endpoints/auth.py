@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from .... import crud, schemas
 from ....db import models
 from ....core.auth.service import AuthService
+from ....core.auth import get_current_user, oauth2_scheme
 from ....db.session import get_db
 
 router = APIRouter(
@@ -68,3 +69,33 @@ def logout(
             detail="Invalid session"
         )
     return {"msg": "Successfully logged out"}
+
+
+@router.post("/change-password")
+def change_password(
+    current_password: str = Form(...),
+    new_password: str = Form(...),
+    db: Session = Depends(get_db),
+    current_user: models.WorkspaceUser = Depends(get_current_user),
+    session_id: str = Depends(oauth2_scheme),
+):
+    """
+    Change the authenticated user's password.
+
+    Enforces the password strength policy and invalidates all other active
+    sessions for the user (the current session is preserved).
+    """
+    auth_service = AuthService(db)
+    try:
+        auth_service.change_password(
+            user=current_user,
+            current_password=current_password,
+            new_password=new_password,
+            keep_session_id=session_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        )
+    return {"msg": "Password changed successfully"}

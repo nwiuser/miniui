@@ -24,6 +24,7 @@ export default function VisualPageBuilder() {
     title: '',
     page_number: 1,
     is_active: true,
+    is_public: false,
     application_id: parseInt(appId, 10),
   });
 
@@ -283,6 +284,7 @@ export default function VisualPageBuilder() {
         title: pageData.title || pageData.name || 'Untitled Page',
         page_number: parseInt(String(pageData.page_number || 1), 10),
         is_active: pageData.is_active ?? true,
+        is_public: pageData.is_public ?? false,
         application_id: numericAppId,
       };
 
@@ -537,6 +539,19 @@ export default function VisualPageBuilder() {
                   className="w-full px-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded-lg text-xs"
                 />
               </div>
+
+              <label className="flex items-center gap-2 cursor-pointer pt-1">
+                <input
+                  type="checkbox"
+                  name="is_public"
+                  checked={pageData.is_public ?? false}
+                  onChange={handlePageInputChange}
+                  className="w-3.5 h-3.5 accent-blue-600"
+                />
+                <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                  Public page (no login required)
+                </span>
+              </label>
             </div>
           </div>
 

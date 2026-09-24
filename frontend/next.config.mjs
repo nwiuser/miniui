@@ -18,7 +18,7 @@ const nextConfig = {
         },
         {
           source: '/app/:path*',
-          destination: `${backendUrl}/app/:path*`,
+          destination: `${backendUrl}/api/v1/pages/:path*`,
         },
         {
           source: '/static/:path*',

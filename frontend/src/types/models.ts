@@ -26,6 +26,7 @@ export interface Page {
   title?: string
   description?: string
   is_active: boolean
+  is_public?: boolean
   created_at: string
   updated_at: string
 }
@@ -38,6 +39,7 @@ export interface PageCreate {
   title?: string
   description?: string
   is_active?: boolean
+  is_public?: boolean
 }
 
 export interface PageUpdate extends Partial<PageCreate> {}

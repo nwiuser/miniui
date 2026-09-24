@@ -37,7 +37,12 @@ export default function PreviewPage() {
         const pageNumber = fetchedPage.page_number || 1;
 
         try {
-          const response = await fetch(`/app/${appAlias}/${pageNumber}`, { signal: AbortSignal.timeout(15000) });
+          const sessionToken =
+            typeof window !== 'undefined' ? window.localStorage.getItem('miniui_token') : null;
+          const sessionParam = sessionToken ? `?session_id=${encodeURIComponent(sessionToken)}` : '';
+          const response = await fetch(`/app/${appAlias}/${pageNumber}${sessionParam}`, {
+            signal: AbortSignal.timeout(15000),
+          });
           setBackendOnline(true);
           if (response.ok) {
             const html = await response.text();
@@ -139,7 +144,11 @@ export default function PreviewPage() {
             ← Back to Page Builder
           </Link>
           <a
-            href={`/app/${application?.alias}/${page?.page_number}`}
+            href={`/app/${application?.alias}/${page?.page_number}${
+              typeof window !== 'undefined' && window.localStorage.getItem('miniui_token')
+                ? `?session_id=${encodeURIComponent(window.localStorage.getItem('miniui_token') || '')}`
+                : ''
+            }`}
             target="_blank"
             rel="noopener noreferrer"
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl flex items-center gap-1 transition"

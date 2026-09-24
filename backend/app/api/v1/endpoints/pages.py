@@ -3,9 +3,11 @@ Page Endpoints
 Handles HTTP requests for showing and accepting pages in the APEX-like application.
 """
 from fastapi import APIRouter, Depends, HTTPException, Request, Form, status
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy.orm import Session
 from typing import Optional
+import os
+import json
 from .... import schemas
 from ....db import models
 from ....db.session import get_db
@@ -22,6 +24,75 @@ router = APIRouter(
 )
 
 
+SESSION_COOKIE = "miniui_session"
+
+
+def _cookie_secure() -> bool:
+    """Secure flag for session cookie (enable over HTTPS in production)."""
+    return os.getenv("COOKIE_SECURE", "false").lower() == "true"
+
+
+def _resolve_session_id(request: Request, explicit: Optional[str]) -> Optional[str]:
+    """Prefer an explicitly supplied session ID, else fall back to the session cookie."""
+    return explicit or request.cookies.get(SESSION_COOKIE)
+
+
+def _set_session_cookie(response: Response, session_id: str) -> None:
+    """Store the session ID in an HttpOnly, SameSite cookie."""
+    response.set_cookie(
+        key=SESSION_COOKIE,
+        value=session_id,
+        max_age=24 * 60 * 60,
+        httponly=True,
+        secure=_cookie_secure(),
+        samesite="lax",
+    )
+
+
+def _validate_page_session(
+    db: Session,
+    session_id: Optional[str],
+    page: models.Page,
+) -> models.Session:
+    """
+    Validate that a session can view a page.
+
+    Protected pages require a valid, active session bound to the page's
+    application. Public pages may be viewed without a session (returns None
+    for anonymous viewing).
+    """
+    if page.is_public:
+        if not session_id:
+            return None
+        return _get_session_for_page(db, session_id, page)
+
+    if not session_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required to view this page",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return _get_session_for_page(db, session_id, page)
+
+
+def _get_session_for_page(db: Session, session_id: str, page: models.Page) -> Optional[models.Session]:
+    """Return the session if valid and bound to the page's application."""
+    session_service = SessionService(db)
+    session = session_service.get_session(session_id)
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired session",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if session.application_id != page.application_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied to this page"
+        )
+    return session
+
+
 @router.get("/{application_alias}/{page_number}", response_class=HTMLResponse)
 async def show_page(
     application_alias: str,
@@ -32,7 +103,9 @@ async def show_page(
 ):
     """
     Show a page by rendering it from metadata.
-    Publicly accessible (no authentication required) for runtime viewing.
+
+    Public pages (``is_public=True``) render without authentication. Protected
+    pages require a valid session bound to the page's application.
     """
     # Get the application by alias
     application = db.query(models.Application).filter(
@@ -58,6 +131,10 @@ async def show_page(
             status_code=404,
             detail=f"Page {page_number} not found in application '{application_alias}'"
         )
+
+    # Resolve the session (explicit param or cookie) and enforce public/protected
+    resolved_session_id = _resolve_session_id(request, session_id)
+    _validate_page_session(db, resolved_session_id, page)
 
     # Create rendering service
     rendering_service = RenderingService(db)
@@ -66,25 +143,31 @@ async def show_page(
     result = rendering_service.show_page(
         application_alias=application_alias,
         page_number=page_number,
-        session_id=session_id,
+        session_id=resolved_session_id,
         request=request
     )
 
-    # Return the HTML
-    return HTMLResponse(content=result["html"])
+    # Return the HTML and persist the session cookie
+    response = HTMLResponse(content=result["html"])
+    session_cookie = result.get("session_id") or resolved_session_id
+    if session_cookie:
+        _set_session_cookie(response, session_cookie)
+    return response
 
 
 @router.post("/{application_alias}/{page_number}")
 async def accept_page(
     application_alias: str,
     page_number: int,
-    session_id: str = Form(...),
+    session_id: Optional[str] = Form(None),
     request: Request = None,
     db: Session = Depends(get_db)
 ):
     """
     Accept a page submission (form post).
-    Requires valid session for processing.
+
+    Requires a valid session for processing. Protected pages enforce the
+    session is bound to the page's application.
     """
     # Get the application by alias
     application = db.query(models.Application).filter(
@@ -110,6 +193,10 @@ async def accept_page(
             status_code=404,
             detail=f"Page {page_number} not found in application '{application_alias}'"
         )
+
+    # Resolve the session (form field or cookie) and enforce public/protected
+    resolved_session_id = _resolve_session_id(request, session_id)
+    _validate_page_session(db, resolved_session_id, page)
 
     # Get form data from the request
     form = await request.form()
@@ -122,16 +209,25 @@ async def accept_page(
     result = rendering_service.accept_page(
         application_alias=application_alias,
         page_number=page_number,
-        session_id=session_id,
+        session_id=resolved_session_id,
         form_data=form_data
     )
 
     # If there was a redirect URL, return a redirect response
     if result.get("success") and result.get("redirect_url"):
-        return RedirectResponse(url=result["redirect_url"], status_code=303)
+        response = RedirectResponse(url=result["redirect_url"], status_code=303)
+        if resolved_session_id:
+            _set_session_cookie(response, resolved_session_id)
+        return response
 
     # Otherwise, return JSON result
-    return result
+    response = Response(
+        content=json.dumps(result),
+        media_type="application/json",
+    )
+    if resolved_session_id:
+        _set_session_cookie(response, resolved_session_id)
+    return response
 
 
 # Builder endpoints - require authentication and appropriate roles

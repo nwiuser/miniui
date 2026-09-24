@@ -27,6 +27,7 @@ class Page(Base):
     page_number = Column(Integer, nullable=False)
     description = Column(Text)
     is_active = Column(Boolean, default=True)
+    is_public = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     

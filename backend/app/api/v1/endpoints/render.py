@@ -2,25 +2,61 @@
 Render Endpoint
 Handles rendering of pages for preview.
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
-from typing import List
-from .... import schemas
+from typing import Optional
 from ....db import models
 from ....db.session import get_db
+from ....core.session.service import SessionService
 
 router = APIRouter(tags=["render"])
+
+
+def _require_page_session(db: Session, request: Request, page: models.Page) -> None:
+    """
+    Enforce public/protected page visibility for the simple preview renderer.
+
+    Protected pages require a valid active session bound to the page's
+    application. The session may be supplied via ``?session_id=`` or the
+    ``miniui_session`` cookie.
+    """
+    if page.is_public:
+        return
+
+    session_id = (request.query_params.get("session_id")
+                  or request.cookies.get("miniui_session"))
+    if not session_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required to view this page",
+        )
+
+    session_service = SessionService(db)
+    session = session_service.get_session(session_id)
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired session",
+        )
+    if session.application_id != page.application_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied to this page"
+        )
 
 
 @router.get("/app/{appAlias}/{pageNumber}")
 async def render_page(
     appAlias: str,
     pageNumber: int,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """
     Render a page as HTML based on application alias and page number.
+
+    Respects the page's public/protected visibility flag.
     """
     # Find application by alias
     application = db.query(models.Application).filter(models.Application.alias == appAlias).first()
@@ -34,6 +70,9 @@ async def render_page(
     ).first()
     if not page:
         raise HTTPException(status_code=404, detail="Page not found")
+
+    # Public/protected enforcement
+    _require_page_session(db, request, page)
 
     # Get regions for this page
     regions = db.query(models.Region).filter(models.Region.page_id == page.id).all()

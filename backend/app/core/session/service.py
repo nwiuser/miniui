@@ -15,6 +15,9 @@ from ...db.session import get_db
 class SessionService:
     """Service for managing application session state."""
 
+    SESSION_DURATION = timedelta(hours=24)  # Base session lifetime
+    RENEW_WINDOW = timedelta(hours=1)       # Renew when less than this much time remains
+
     def __init__(self, db: Session):
         self.db = db
         self.last_cleanup = None
@@ -47,7 +50,7 @@ class SessionService:
             Session ID string
         """
         session_id = str(uuid.uuid4())
-        expires_at = datetime.utcnow() + timedelta(hours=24)  # 24 hour session
+        expires_at = datetime.utcnow() + self.SESSION_DURATION
 
         db_session = models.Session(
             session_id=session_id,
@@ -65,6 +68,9 @@ class SessionService:
         """
         Get a session by its session ID.
 
+        Applies a sliding expiration window: sessions near the end of their
+        lifetime are renewed so active users are not logged out every 24h.
+
         Args:
             session_id: The session ID string
 
@@ -79,6 +85,16 @@ class SessionService:
             models.Session.is_active == True,
             models.Session.expires_at > datetime.utcnow()
         ).first()
+
+        if session is None:
+            return None
+
+        # Sliding renewal: extend the session if it is inside the renewal window.
+        time_left = session.expires_at - datetime.utcnow()
+        if time_left < self.RENEW_WINDOW:
+            session.expires_at = datetime.utcnow() + self.SESSION_DURATION
+            session.updated_at = datetime.utcnow()
+            self.db.commit()
 
         return session
 

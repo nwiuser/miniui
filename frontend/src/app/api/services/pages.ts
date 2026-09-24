@@ -7,6 +7,7 @@ export interface Page {
   title?: string;
   page_number: number;
   is_active: boolean;
+  is_public?: boolean;
   application_id: number;
   created_at?: string;
   updated_at?: string;
@@ -18,6 +19,7 @@ export interface PageCreate {
   title?: string;
   page_number: number;
   is_active?: boolean;
+  is_public?: boolean;
   application_id: number;
 }
 
