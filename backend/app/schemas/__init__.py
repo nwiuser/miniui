@@ -8,6 +8,7 @@ from .region import Region, RegionCreate, RegionUpdate
 from .item import Item, ItemCreate, ItemUpdate
 from .page import Page, PageCreate, PageUpdate
 from .process import PageProcess, PageProcessCreate, PageProcessUpdate
+from .rest import RestDataSource, RestDataSourceCreate, RestDataSourceUpdate, RestDataSourceExecuteResponse, ApplicationMetadata
 
 __all__ = ["Application", "ApplicationCreate", "ApplicationUpdate",
            "Validation", "ValidationCreate", "ValidationUpdate",
@@ -18,4 +19,6 @@ __all__ = ["Application", "ApplicationCreate", "ApplicationUpdate",
            "Region", "RegionCreate", "RegionUpdate",
            "Item", "ItemCreate", "ItemUpdate",
            "Page", "PageCreate", "PageUpdate",
-           "PageProcess", "PageProcessCreate", "PageProcessUpdate"]
+           "PageProcess", "PageProcessCreate", "PageProcessUpdate",
+           "RestDataSource", "RestDataSourceCreate", "RestDataSourceUpdate",
+           "RestDataSourceExecuteResponse", "ApplicationMetadata"]

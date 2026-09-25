@@ -7,6 +7,7 @@ import { Icon } from '@iconify/react';
 import { applicationService, Application } from '@/app/api/services/applications';
 import { pageService, Page } from '@/app/api/services/pages';
 import { lovService, Lov } from '@/app/api/services/lovs';
+import { restDataSourceService, RestDataSource } from '@/app/api/services/rest-data-sources';
 
 export default function ApplicationBuilderPage() {
   const params = useParams();
@@ -24,7 +25,9 @@ export default function ApplicationBuilderPage() {
 
   const [pages, setPages] = useState<Page[]>([]);
   const [lovs, setLovs] = useState<Lov[]>([]);
+  const [restSources, setRestSources] = useState<RestDataSource[]>([]);
   const [showLovs, setShowLovs] = useState(false);
+  const [showRestSources, setShowRestSources] = useState(false);
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,6 +55,13 @@ export default function ApplicationBuilderPage() {
           setLovs(fetchedLovs || []);
         } catch {
           setLovs([]);
+        }
+
+        try {
+          const fetchedRestSources = await restDataSourceService.getByAppId(appId);
+          setRestSources(fetchedRestSources || []);
+        } catch {
+          setRestSources([]);
         }
       } catch (err: any) {
         setError(err.message || 'Failed to load application');
@@ -172,6 +182,93 @@ export default function ApplicationBuilderPage() {
         }
       }
       setLovs(prev => prev.filter((_, i) => i !== index));
+    }
+  };
+
+  const handleAddRestSource = () => {
+    const newSource: RestDataSource = {
+      application_id: parseInt(appId, 10),
+      name: `REST_${Date.now()}`,
+      url: 'https://',
+      method: 'GET',
+      timeout: 30,
+      is_active: true,
+    };
+    setRestSources(prev => [...prev, newSource]);
+  };
+
+  const handleUpdateRestSource = async (index: number, field: string, value: any) => {
+    const source = restSources[index];
+    const updated = { ...source, [field]: value };
+    setRestSources(prev => prev.map((s, i) => i === index ? updated : s));
+
+    if (source.id) {
+      try {
+        await restDataSourceService.update(source.id, { [field]: value });
+      } catch (err: any) {
+        alert(`Failed to update REST data source: ${err.message}`);
+      }
+    }
+  };
+
+  const handleSaveRestSource = async (index: number) => {
+    const source = restSources[index];
+    try {
+      if (source.id) {
+        await restDataSourceService.update(source.id, {
+          name: source.name,
+          url: source.url,
+          method: source.method,
+          timeout: source.timeout,
+          is_active: source.is_active,
+          query_params: source.query_params,
+          response_mapping: source.response_mapping,
+        });
+        alert('REST data source saved successfully!');
+      } else {
+        const created = await restDataSourceService.create({
+          application_id: parseInt(appId, 10),
+          name: source.name,
+          url: source.url,
+          method: source.method,
+          timeout: source.timeout,
+          is_active: source.is_active,
+          query_params: source.query_params,
+          response_mapping: source.response_mapping,
+        });
+        setRestSources(prev => prev.map((s, i) => i === index ? created : s));
+        alert('REST data source created successfully!');
+      }
+    } catch (err: any) {
+      alert(`Failed to save REST data source: ${err.message}`);
+    }
+  };
+
+  const handleTestRestSource = async (index: number) => {
+    const source = restSources[index];
+    if (!source.id) {
+      alert('Save the REST data source before testing it.');
+      return;
+    }
+    try {
+      const result = await restDataSourceService.execute(source.id);
+      alert(`OK (${result.status_code})\nData: ${JSON.stringify(result.data).slice(0, 300)}`);
+    } catch (err: any) {
+      alert(`Test failed: ${err.message}`);
+    }
+  };
+
+  const handleDeleteRestSource = async (index: number) => {
+    const source = restSources[index];
+    if (confirm(`Delete REST data source "${source.name}"?`)) {
+      if (source.id) {
+        try {
+          await restDataSourceService.delete(source.id);
+        } catch (err: any) {
+          alert(`Failed to delete REST data source: ${err.message}`);
+        }
+      }
+      setRestSources(prev => prev.filter((_, i) => i !== index));
     }
   };
 
@@ -475,6 +572,110 @@ export default function ApplicationBuilderPage() {
                           className="w-full px-3 py-1.5 border rounded-lg text-xs font-mono"
                         />
                       )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    {/* REST Data Sources Section */}
+      {!isNew && (
+        <div className="bg-white dark:bg-dark-card p-6 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
+          <button
+            onClick={() => setShowRestSources(!showRestSources)}
+            className="w-full flex justify-between items-center"
+          >
+            <div className="flex items-center gap-2">
+              <Icon icon="solar:global-bold" className="text-sky-600" />
+              <h2 className="text-lg font-bold">REST Data Sources ({restSources.length})</h2>
+            </div>
+            <Icon
+              icon={showRestSources ? 'solar:alt-arrow-up-bold' : 'solar:alt-arrow-down-bold'}
+              className="text-gray-400"
+            />
+          </button>
+
+          {showRestSources && (
+            <div className="mt-4 space-y-4">
+              <p className="text-sm text-gray-500">
+                Connect pages to external REST services. Define a source here, then reference it from a
+                &quot;rest&quot; region in the page builder.
+              </p>
+
+              <button
+                onClick={handleAddRestSource}
+                className="inline-flex items-center gap-2 bg-sky-600 hover:bg-sky-700 text-white text-sm font-semibold px-4 py-2 rounded-xl shadow transition"
+              >
+                <Icon icon="solar:add-circle-bold" />
+                + New REST Data Source
+              </button>
+
+              {restSources.length === 0 ? (
+                <div className="py-8 text-center border-2 border-dashed border-gray-200 dark:border-gray-800 rounded-xl">
+                  <Icon icon="solar:global-bold" className="text-4xl text-gray-300 mx-auto mb-2" />
+                  <p className="text-gray-500 text-sm">No REST data sources configured yet.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {restSources.map((source, index) => (
+                    <div key={source.id || index} className="p-4 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="text"
+                          value={source.name}
+                          onChange={(e) => handleUpdateRestSource(index, 'name', e.target.value)}
+                          className="flex-1 px-3 py-1.5 border rounded-lg text-sm font-medium"
+                          placeholder="Source Name"
+                        />
+                        <select
+                          value={source.method || 'GET'}
+                          onChange={(e) => handleUpdateRestSource(index, 'method', e.target.value)}
+                          className="px-2 py-1.5 border rounded-lg text-xs font-semibold"
+                        >
+                          <option value="GET">GET</option>
+                          <option value="POST">POST</option>
+                          <option value="PUT">PUT</option>
+                          <option value="DELETE">DELETE</option>
+                        </select>
+                        <label className="flex items-center gap-2 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={source.is_active ?? true}
+                            onChange={(e) => handleUpdateRestSource(index, 'is_active', e.target.checked)}
+                            className="w-4 h-4"
+                          />
+                          Active
+                        </label>
+                        <button
+                          onClick={() => handleSaveRestSource(index)}
+                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg"
+                        >
+                          Save
+                        </button>
+                        <button
+                          onClick={() => handleTestRestSource(index)}
+                          className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-semibold rounded-lg"
+                          title="Execute and preview the response"
+                        >
+                          Test
+                        </button>
+                        <button
+                          onClick={() => handleDeleteRestSource(index)}
+                          className="p-1.5 text-gray-400 hover:text-red-600"
+                          title="Delete Source"
+                        >
+                          <Icon icon="solar:trash-bin-trash-bold" />
+                        </button>
+                      </div>
+                      <input
+                        type="url"
+                        value={source.url || ''}
+                        onChange={(e) => handleUpdateRestSource(index, 'url', e.target.value)}
+                        placeholder="https://api.example.com/v1/endpoint"
+                        className="w-full px-3 py-1.5 border rounded-lg text-xs font-mono"
+                      />
                     </div>
                   ))}
                 </div>

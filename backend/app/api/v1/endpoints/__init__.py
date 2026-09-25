@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from . import applications, lov, validation, workspace_user, pages, auth, region, item, render, process, computation
+from . import applications, lov, validation, workspace_user, pages, auth, region, item, render, process, computation, rest
 
 # Create the main API router for v1
 api_router = APIRouter()
@@ -17,3 +17,4 @@ api_router.include_router(item.router, tags=["items"])
 api_router.include_router(render.router, tags=["render"])
 api_router.include_router(process.router, prefix="/processes", tags=["processes"])
 api_router.include_router(computation.router, prefix="/computations", tags=["computations"])
+api_router.include_router(rest.router, tags=["rest-data-sources"])

@@ -15,7 +15,8 @@ from ..session.service import SessionService
 from ..region_types import (
     render_static_content_region,
     render_report_region,
-    form_region
+    form_region,
+    render_rest_region
 )
 from ..item_types import (
     render_text_item,
@@ -318,6 +319,8 @@ class RenderingService:
             return render_report_region(region, self.db, session_id, page_id, self.session_service, self)
         elif region_type == "form":
             return form_region(region, self.db, session_id, page_id, self.session_service)
+        elif region_type == "rest":
+            return render_rest_region(region, self.db, session_id, page_id, self.session_service)
         else:
             # For unsupported region types, return a placeholder
             return f"<div class='region region-{region.id}'><h3>{region.name}</h3><p>Region type '{region.region_type}' not yet implemented.</p></div>"

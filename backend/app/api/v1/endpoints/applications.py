@@ -78,3 +78,57 @@ def delete_application(application_id: int, db: Session = Depends(get_db), curre
     if db_application is None:
         raise HTTPException(status_code=404, detail="Application not found")
     return db_application
+
+
+@router.get("/{application_id}/metadata", response_model=schemas.ApplicationMetadata)
+def get_application_metadata(
+    application_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.WorkspaceUser = Depends(require_role("ADMIN", "DEVELOPER")),
+):
+    """
+    Export a complete application definition (pages, regions, items, processes,
+    computations, validations) as JSON for external consumption.
+
+    Secured with the same authentication system; ADMIN/DEVELOPER only.
+    """
+    application = crud.get_application(db, application_id=application_id)
+    if application is None:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    def _column_dict(obj):
+        if obj is None:
+            return None
+        return {c.name: getattr(obj, c.name) for c in obj.__table__.columns}
+
+    pages = db.query(models.Page).filter(
+        models.Page.application_id == application_id
+    ).order_by(models.Page.page_number).all()
+
+    page_defs = []
+    for page in pages:
+        page_defs.append({
+            **_column_dict(page),
+            "regions": [
+                _column_dict(r)
+                for r in db.query(models.Region).filter(models.Region.page_id == page.id).all()
+            ],
+            "items": [
+                _column_dict(i)
+                for i in db.query(models.PageItem).filter(models.PageItem.page_id == page.id).all()
+            ],
+            "processes": [
+                _column_dict(p)
+                for p in db.query(models.PageProcess).filter(models.PageProcess.page_id == page.id).all()
+            ],
+            "computations": [
+                _column_dict(c)
+                for c in db.query(models.Computation).filter(models.Computation.page_id == page.id).all()
+            ],
+            "validations": [
+                _column_dict(v)
+                for v in db.query(models.Validation).filter(models.Validation.page_id == page.id).all()
+            ],
+        })
+
+    return {"application": _column_dict(application), "pages": page_defs}

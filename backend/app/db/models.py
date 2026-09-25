@@ -128,6 +128,27 @@ class SessionStateItem(Base):
     )
 
 
+class RestDataSource(Base):
+    __tablename__ = "apex_rest_data_sources"
+
+    id = Column(Integer, primary_key=True, index=True)
+    application_id = Column(Integer, ForeignKey("apex_applications.id"), nullable=False)
+    name = Column(String(255), nullable=False)
+    url = Column(String(2000), nullable=False)
+    method = Column(String(10), default="GET")  # GET, POST, PUT, DELETE
+    headers = Column(JSON)  # Optional request headers as {name: value}
+    query_params = Column(JSON)  # Optional query parameters as {name: value}
+    request_body = Column(JSON)  # Optional JSON body for POST/PUT/DELETE
+    response_mapping = Column(JSON)  # {item_name: dot.path.in.response}
+    timeout = Column(Integer, default=30)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    application = relationship("Application")
+
+
 class Validation(Base):
     __tablename__ = "apex_validations"
 

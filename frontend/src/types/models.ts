@@ -44,6 +44,35 @@ export interface PageCreate {
 
 export interface PageUpdate extends Partial<PageCreate> {}
 
+export interface RestDataSource {
+  id: number
+  application_id: number
+  name: string
+  url: string
+  method: string
+  headers?: Record<string, string>
+  query_params?: Record<string, unknown>
+  request_body?: Record<string, unknown>
+  response_mapping?: Record<string, string>
+  timeout?: number
+  is_active?: boolean
+  created_at?: string
+  updated_at?: string
+}
+
+export interface RestDataSourceCreate {
+  application_id: number
+  name: string
+  url: string
+  method: string
+  headers?: Record<string, string>
+  query_params?: Record<string, unknown>
+  request_body?: Record<string, unknown>
+  response_mapping?: Record<string, string>
+  timeout?: number
+  is_active?: boolean
+}
+
 export interface Region {
   id?: number
   _tempId?: string
