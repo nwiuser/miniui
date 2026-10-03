@@ -1,7 +1,7 @@
 # Frontend Dockerfile
 FROM node:20-alpine AS deps
 WORKDIR /app
-COPY package.json package-lock.json* ./
+COPY package.json package-lock.json* .npmrc ./
 # Use npm install (not npm ci) so platform-specific optional deps
 # (@esbuild/*, @next/swc-linux-*, lightningcss-*) are resolved for this
 # Linux build even when the lockfile was generated on another OS.

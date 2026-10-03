@@ -7,6 +7,7 @@ from starlette.responses import Response
 import os
 
 from app.api import api_router
+from app.core.cache import application_metadata_cache
 from app.core.security.rate_limit import RateLimitMiddleware
 
 app = FastAPI(
@@ -119,6 +120,17 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Include API router
 app.include_router(api_router, prefix="/api")
+
+@app.get("/health")
+async def health():
+    """Liveness probe used by Docker Compose and Kubernetes."""
+    return {
+        "status": "ok",
+        "service": "apexos-backend",
+        "version": app.version,
+        "metadata_cache": application_metadata_cache.stats(),
+    }
+
 
 @app.get("/")
 async def root():

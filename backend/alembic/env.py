@@ -21,6 +21,15 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
+# The ini file carries a localhost default, which is wrong inside a container.
+# DATABASE_URL (the same variable the application uses) replaces that default,
+# but an explicitly configured URL -- e.g. a per-test database set on the Config
+# object -- is always preserved.
+DEFAULT_URL = "postgresql://apexos_user:apexos_pass@localhost:5432/apexos"
+database_url = os.getenv("DATABASE_URL")
+if database_url and config.get_main_option("sqlalchemy.url") in (None, "", DEFAULT_URL):
+    config.set_main_option("sqlalchemy.url", database_url)
+
 # add your model's MetaData object here
 # for 'autogenerate' support
 # from myapp import mymodel

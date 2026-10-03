@@ -1,51 +1,47 @@
 #!/usr/bin/env python3
-"""
-Database initialization script for ApexOS.
-Creates initial data and sets up the database.
+"""Initialize the ApexOS database.
+
+Runs the same startup routine the container uses: apply every Alembic migration
+(stamping legacy ``create_all`` schemas first) and, when the ``BOOTSTRAP_ADMIN_*``
+variables are set, create the first administrator.
+
+Usage:
+    python scripts/init_db.py
+
+Optional environment variables for seeding the first admin:
+    BOOTSTRAP_ADMIN_USERNAME
+    BOOTSTRAP_ADMIN_PASSWORD
+    BOOTSTRAP_ADMIN_EMAIL
 """
 
 import sys
-import os
 from pathlib import Path
 
-# Add the backend directory to sys.path so we can import from app
-backend_dir = Path(__file__).resolve().parent.parent / 'backend'
-sys.path.append(str(backend_dir))
 
-from app.db.session import SessionLocal, engine, Base, create_tables
-from app.db import models
+def _find_backend_dir() -> Path:
+    """Locate the backend package for both the repo and the container layout.
 
-def init_db() -> None:
-    """Initialize the database with tables and initial data."""
-    # Create tables
-    print("Creating database tables...")
-    create_tables()  # This uses the Base from session.py
-    print("Database tables created successfully!")
+    In the repository the script is at ``<root>/scripts`` and the app at
+    ``<root>/backend``; in the backend container it is mounted at
+    ``/app/scripts`` next to the app.
+    """
+    here = Path(__file__).resolve()
+    for candidate in (here.parent.parent / "backend", here.parent.parent):
+        if (candidate / "bootstrap.py").exists():
+            return candidate
+    raise SystemExit("Could not locate the backend directory.")
 
-    # Create initial data
-    print("Creating initial data...")
-    db = SessionLocal()
-    try:
-        # Check if we already have data
-        if db.query(models.Application).first() is not None:
-            print("Database already contains data. Skipping initial data creation.")
-            return
 
-        # Create a sample application
-        # app = models.Application(
-        #     name="Sample Application",
-        #     alias="SAMPLE",
-        #     description="A sample application to get started"
-        # )
-        # db.add(app)
-        # db.commit()
-        # print("Created sample application")
+sys.path.insert(0, str(_find_backend_dir()))
 
-        print("Initial data creation skipped (implement as needed)")
-    finally:
-        db.close()
+import bootstrap  # noqa: E402
+
+
+def main() -> None:
+    print("Initializing ApexOS database...")
+    bootstrap.main()
+    print("Database initialization complete.")
+
 
 if __name__ == "__main__":
-    print("Initializing ApexOS database...")
-    init_db()
-    print("Database initialization complete!")
+    main()

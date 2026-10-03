@@ -286,6 +286,8 @@ class TestSessionStateDataRemap:
             ).scalar()
         assert remaining == 0
 
+
+
     def test_remap_translates_against_existing_sessions(self, db_url, engine):
         """_remap_session_state translates string session ids to apex_sessions.id
         and drops rows whose session is gone."""
@@ -372,3 +374,60 @@ class TestSessionStateDataRemap:
                 text("SELECT count(*) FROM apex_session_state")
             ).scalar()
         assert remaining == 0
+
+
+class TestDatabaseUrlOverride:
+    """The container applies migrations using DATABASE_URL, not alembic.ini."""
+
+    def test_env_database_url_replaces_ini_default(self, db_url, engine, monkeypatch):
+        monkeypatch.setenv("DATABASE_URL", db_url)
+
+        # No explicit URL: env.py must fall back to DATABASE_URL so migrations
+        # land in the scratch database instead of the ini's localhost default.
+        upgrade(Config(ALEMBIC_INI), "head")
+
+        assert inspect(engine).has_table("apex_pages")
+
+    def test_explicit_config_url_wins_over_env(self, db_url, engine, monkeypatch):
+        # A per-test URL set on the Config object must never be clobbered, even
+        # if DATABASE_URL points somewhere unreachable.
+        monkeypatch.setenv(
+            "DATABASE_URL", "postgresql://nobody:nope@127.0.0.1:1/nowhere"
+        )
+
+        upgrade(_config(db_url), "head")
+
+        assert inspect(engine).has_table("apex_pages")
+
+
+class TestBootstrap:
+    """bootstrap.py prepares legacy create_all() databases for Alembic."""
+
+    def test_stamps_a_create_all_schema_and_is_idempotent(
+        self, db_url, engine, monkeypatch
+    ):
+        import bootstrap
+
+        # Reproduce the old initialization path: tables exist, no version row.
+        models.Base.metadata.create_all(engine)
+        monkeypatch.setenv("DATABASE_URL", db_url)
+
+        bootstrap.main()
+        bootstrap.main()
+
+        with engine.connect() as connection:
+            version = connection.execute(
+                text("SELECT version_num FROM alembic_version")
+            ).scalar()
+        assert version == "b3c4d5e6f7a8"
+
+    def test_a_fresh_database_is_migrated_and_not_stamped(
+        self, db_url, engine, monkeypatch
+    ):
+        import bootstrap
+
+        monkeypatch.setenv("DATABASE_URL", db_url)
+
+        bootstrap.main()
+
+        assert inspect(engine).has_table("apex_applications")

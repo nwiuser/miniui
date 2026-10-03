@@ -6720,6 +6720,23 @@
           "workspace-users"
         ]
       }
+    },
+    "/health": {
+      "get": {
+        "description": "Liveness probe used by Docker Compose and Kubernetes.",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health"
+      }
     }
   }
 }
