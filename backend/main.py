@@ -42,12 +42,30 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.exempt_paths = set(exempt_paths or [])
 
+    def _is_exempt(self, path: str) -> bool:
+        """True when the path is exempt, either exactly or below an exempt prefix.
+
+        Matching is done on path segments, not raw prefixes: a plain
+        ``startswith`` test makes ``"/"`` exempt every route, which silently
+        disables the middleware, and would also exempt ``/api/v1/auth/login-extra``
+        for an entry of ``/api/v1/auth/login``.
+        """
+        for exempt in self.exempt_paths:
+            prefix = exempt.rstrip("/")
+            if path == exempt or path == prefix:
+                return True
+            # An entry of "/" means the root endpoint only; treating it as a
+            # prefix would exempt every path.
+            if prefix and path.startswith(prefix + "/"):
+                return True
+        return False
+
     async def dispatch(self, request: Request, call_next):
         # If request method is safe, skip CSRF check
         if request.method in ("GET", "HEAD", "OPTIONS", "TRACE"):
             return await call_next(request)
         # If path is exempt, skip CSRF check
-        if any(request.url.path.startswith(path) for path in self.exempt_paths):
+        if self._is_exempt(request.url.path):
             return await call_next(request)
         # Require custom header X-Requested-With: XMLHttpRequest
         header_value = request.headers.get("X-Requested-With")
@@ -65,11 +83,12 @@ exempt_paths = [
     "/docs",
     "/redoc",
     "/openapi.json",
-    "/auth/login",
-    "/auth/logout",
     "/api/v1/auth/login",
     "/api/v1/auth/logout",
-    "/",  # root endpoint
+    # Runtime page submissions arrive as plain browser form posts, which cannot
+    # carry the X-Requested-With header. They are protected by the session and
+    # page-visibility checks instead.
+    "/api/v1/pages",
 ]
 
 # Add CSRF protection middleware

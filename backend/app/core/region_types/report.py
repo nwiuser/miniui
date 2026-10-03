@@ -4,11 +4,30 @@ Renders regions of type 'report' which display data from SQL queries.
 """
 from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 import json
 import math
 
 from ...db import models
 from ..session.service import SessionService
+
+
+def _region_options(region: models.Region) -> Dict[str, Any]:
+    """Normalise region.template_options into a dict.
+
+    template_options may arrive as a dict (native JSON column) or as a
+    JSON-encoded string depending on how the row was written. Anything that
+    cannot be interpreted as a mapping yields an empty dict.
+    """
+    if not region.template_options:
+        return {}
+    options = region.template_options
+    if isinstance(options, (str, bytes)):
+        try:
+            options = json.loads(options)
+        except (json.JSONDecodeError, TypeError, ValueError):
+            return {}
+    return options if isinstance(options, dict) else {}
 
 
 def render_report_region(
@@ -47,9 +66,7 @@ def render_report_region(
     sql_query = ""
     if region.template_options:
         try:
-            options = region.template_options if isinstance(region.template_options, dict) else {}
-            if isinstance(options, str):
-                options = json.loads(options)
+            options = _region_options(region)
 
             # Look for the SQL query in common locations
             sql_query = (
@@ -73,9 +90,7 @@ def render_report_region(
     # Check if items per page is specified in region options
     if region.template_options:
         try:
-            opts = region.template_options if isinstance(region.template_options, dict) else {}
-            if isinstance(opts, str):
-                opts = json.loads(opts)
+            opts = _region_options(region)
 
             items_per_page_item = opts.get("items_per_page_item")
             if items_per_page_item:
@@ -93,9 +108,7 @@ def render_report_region(
     page_item = None
     if region.template_options:
         try:
-            opts = region.template_options if isinstance(region.template_options, dict) else {}
-            if isinstance(opts, str):
-                opts = json.loads(opts)
+            opts = _region_options(region)
 
             page_item = opts.get("page_item")
             if page_item:
@@ -121,9 +134,7 @@ def render_report_region(
 
     if region.template_options:
         try:
-            opts = region.template_options if isinstance(region.template_options, dict) else {}
-            if isinstance(opts, str):
-                opts = json.loads(opts)
+            opts = _region_options(region)
 
             sort_column_item = opts.get("sort_column_item")
             if sort_column_item:
@@ -184,7 +195,7 @@ def render_report_region(
         paginated_sql = f"{ordered_sql} LIMIT {items_per_page} OFFSET {offset}"
 
         # Execute the query
-        result = db.execute(paginated_sql)
+        result = db.execute(text(paginated_sql))
 
         # Get column names
         columns = list(result.keys()) if hasattr(result, 'keys') else []
@@ -239,8 +250,9 @@ def render_report_region(
             # Reconstruct without ORDER BY
             count_sql = f"SELECT COUNT(*) FROM ({select_part}) count_table"
 
-        count_result = db.execute(count_sql)
-        total_rows = list(count_result)[0][0] if list(count_result) else 0
+        count_result = db.execute(text(count_sql))
+        count_rows = list(count_result)
+        total_rows = count_rows[0][0] if count_rows else 0
     except Exception:
         # If we can't get the count, we'll hide the pagination controls
         total_rows = 0
@@ -270,30 +282,26 @@ def render_report_region(
         if has_previous or has_next:
             html_parts.append(f"      <div class='pagination-controls'>")
             if has_previous:
-                # Link to previous page
-                prev_page_item = page_item or f"{pagination_prefix}_PAGE"
-                # In a real implementation, this would generate a URL or trigger a submit
-                # For now, we'll just show the text with a data attribute for JS handling
-                html_parts.append(f"        <button type='button' class='pagination-prev' data-page='{current_page - 1}' data-sort-column='{sort_column}' data-sort-direction='{sort_direction}'>« Previous</button>")
+                html_parts.append(f"        <button type='button' class='pagination-prev' data-page='{current_page - 1}' data-page-item='{page_item or ''}' data-sort-column='{sort_column or ''}' data-sort-direction='{sort_direction}'>« Previous</button>")
             if has_next:
-                # Link to next page
-                next_page_item = page_item or f"{pagination_prefix}_PAGE"
-                html_parts.append(f"        <button type='button' class='pagination-next' data-page='{current_page + 1}' data-sort-column='{sort_column}' data-sort-direction='{sort_direction}'>Next »</button>")
-            # Add page selector if there are many pages
-            if total_pages > 1:
-                html_parts.append(f"      </div>")
-                html_parts.append(f"      <div class='page-selector'>")
-                html_parts.append(f"        <select class='page-select' data-page-item='{page_item or ''}' data-sort-column='{sort_column}' data-sort-direction='{sort_direction}'>")
-                for p in range(1, min(total_pages + 1, 11)):  # Show first 10 pages
-                    selected = ' selected' if p == current_page else ''
-                    html_parts.append(f"          <option value='{p}'{selected}>{p}</option>")
-                if total_pages > 10:
-                    html_parts.append(f"          <option value='...'>...</option>")
-                    # Add last page
-                    html_parts.append(f"          <option value='{total_pages}'>{total_pages}</option>")
-                html_parts.append(f"        </select>")
-                html_parts.append(f"      </div>")
-            html_parts.append(f"    </div>")
+                html_parts.append(f"        <button type='button' class='pagination-next' data-page='{current_page + 1}' data-page-item='{page_item or ''}' data-sort-column='{sort_column or ''}' data-sort-direction='{sort_direction}'>Next »</button>")
+            html_parts.append(f"      </div>")
+
+        # Add page selector if there are multiple pages
+        if total_pages > 1:
+            html_parts.append(f"      <div class='page-selector'>")
+            html_parts.append(f"        <select class='page-select' data-page-item='{page_item or ''}' data-sort-column='{sort_column or ''}' data-sort-direction='{sort_direction}'>")
+            for p in range(1, min(total_pages + 1, 11)):  # Show first 10 pages
+                selected = ' selected' if p == current_page else ''
+                html_parts.append(f"          <option value='{p}'{selected}>{p}</option>")
+            if total_pages > 10:
+                html_parts.append(f"          <option value='...'>...</option>")
+                # Add last page
+                html_parts.append(f"          <option value='{total_pages}'>{total_pages}</option>")
+            html_parts.append(f"        </select>")
+            html_parts.append(f"      </div>")
+
+        html_parts.append(f"    </div>")
 
     html_parts.extend([
         f"    <table class='report-table'>",

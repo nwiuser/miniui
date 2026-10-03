@@ -184,21 +184,27 @@ Create React application for building ApexOS applications:
 
 ## Phase 7: Testing and Quality Assurance
 
+Status: complete. See `PHASE7_SUMMARY.md` for the full report.
+
 ### 7.1 Backend Testing
 - Unit tests for core rendering functions
 - Integration tests for show_page/accept_page flows
 - Database migration tests
 - API endpoint tests
+- Authentication, session and lockout tests (`tests/test_auth.py`)
+- HTTP-only end-to-end lifecycle tests (`tests/test_e2e_flow.py`)
+- Result: 421 tests passing against PostgreSQL.
 
 ### 7.2 Frontend Testing
-- Unit tests for React components
-- Integration tests for builder workflows
-- End-to-end tests for application creation and execution
+- Unit tests for React components (login, auth guard)
+- Integration tests for builder workflows (create/update/delete application and pages)
+- End-to-end tests for application creation and execution (backend HTTP flow)
+- Result: 108 tests passing, `tsc --noEmit` clean, `next build` succeeds.
 
 ### 7.3 Performance Testing
-- Load testing for concurrent users
-- Database query optimization
-- Caching strategies for metadata
+- Database query optimization: added lookup indexes for the runtime and builder hot paths (`b3c4d5e6f7a8`)
+- Caching strategies for metadata: in-process TTL cache in `app/core/cache.py`, wired to the application metadata export
+- Performance smoke tests with a generous budget in `tests/test_cache_and_performance.py`
 
 ## Phase 8: Deployment and Documentation
 

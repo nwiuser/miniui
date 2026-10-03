@@ -7,6 +7,7 @@ from datetime import datetime
 import json
 
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from fastapi import HTTPException, Request
 
 from ...db import models
@@ -292,12 +293,12 @@ class RenderingService:
                 "redirect_url": redirect_url
             }
 
-        # Default behavior: redirect back to the same page
+        # Default behavior: redirect back to the rendered page
         return {
             "success": True,
             "session_id": session_id,
             "message": "Page processed successfully",
-            "redirect_url": f"/{application.alias}/{page.page_number}"
+            "redirect_url": f"/api/v1/pages/{application.alias}/{page.page_number}"
         }
 
     def _initialize_page_items(self, session_id: str, page_id: int, page_items: list):
@@ -375,7 +376,7 @@ class RenderingService:
 
         try:
             # Execute the SQL
-            result = self.db.execute(sql)
+            result = self.db.execute(text(sql))
             # For SELECT statements, we might want to store results in session state
             # For INSERT/UPDATE/DELETE, we commit the transaction
             if sql.strip().upper().startswith(("INSERT", "UPDATE", "DELETE")):
@@ -505,7 +506,7 @@ class RenderingService:
 
         try:
             # Execute the SQL query
-            result = self.db.execute(sql)
+            result = self.db.execute(text(sql))
 
             # Get the first column of the first row
             row = result.fetchone()
@@ -609,7 +610,7 @@ class RenderingService:
     def _reset_pagination_for_all_regions(self, session_id: str, page_id: int):
         """Reset pagination for all report regions on the page."""
         from ..session.service import SessionService
-        from ... import models
+        from ...db import models
         session_service = SessionService(self.db)
 
         # Get all regions for this page
@@ -649,8 +650,14 @@ class RenderingService:
         # Get the item value
         item_value = self.session_service.get_item(session_id, page_id, validation.item_name)
 
-        # If the item is not required and has no value, skip validation
-        if not item_value and validation.validation_type not in ["NOT_NULL", "VALUE_REQUIRED"]:
+        # If the item is not required and has no value, skip validation. The three
+        # "has a value" types must still run, otherwise a missing item would
+        # silently pass them.
+        if not item_value and validation.validation_type not in [
+            "NOT_NULL",
+            "VALUE_REQUIRED",
+            "VALUE_NOT_NULL",
+        ]:
             return None
 
         # Replace substitution strings in the validation expression

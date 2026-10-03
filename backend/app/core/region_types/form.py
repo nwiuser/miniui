@@ -55,8 +55,8 @@ def form_region(region: models.Region, db: Session, session_id: str, page_id: in
         f"    <h3>{region.name}</h3>",
         f"  </div>",
         f"  <div class='form-body'>",
-        f"    <form class='apex-form' method='post' action='/ords/apex/{region.page.application.alias}/{region.page.page_number}'>",
-        f"      <input type='hidden' name='p_session_id' value='{session_id}'>",
+        f"    <form class='apex-form' method='post' action='/api/v1/pages/{region.page.application.alias}/{region.page.page_number}'>",
+        f"      <input type='hidden' name='session_id' value='{session_id}'>",
         f"      <input type='hidden' name='p_request' value='SUBMIT'>",
         f"      <div class='form-fields'>"
     ]

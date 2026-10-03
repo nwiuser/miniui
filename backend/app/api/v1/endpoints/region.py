@@ -9,7 +9,7 @@ from .... import schemas
 from ....db import models
 from ....db.session import get_db
 from .... import crud
-from ....core.auth import require_role, application_access_required, get_current_user
+from ....core.auth import require_role, application_access_required, get_current_user, get_current_session
 
 
 router = APIRouter(
@@ -20,7 +20,7 @@ router = APIRouter(
 
 
 @router.get("/", response_model=List[schemas.Region])
-def read_regions(skip: int = 0, limit: int = 100, page_id: Optional[int] = None, db: Session = Depends(get_db), current_user: models.WorkspaceUser = Depends(get_current_user)):
+def read_regions(skip: int = 0, limit: int = 100, page_id: Optional[int] = None, db: Session = Depends(get_db), current_user: models.WorkspaceUser = Depends(get_current_user), current_session: models.Session = Depends(get_current_session)):
     """
     Retrieve regions. Optionally filter by page_id.
     ADMIN/DEVELOPER: Can access all regions
@@ -33,27 +33,23 @@ def read_regions(skip: int = 0, limit: int = 100, page_id: Optional[int] = None,
         if page:
             application_id = page.application_id
             # Check application access
-            application_access_required(application_id)(current_user, None, db)
+            application_access_required(application_id)(current_user, current_session, db)
 
     # For ADMIN/DEVELOPER, show all; for END_USER, filter by session application
     if current_user.administrator_role in ["ADMIN", "DEVELOPER"]:
         regions = crud.get_regions(db, skip=skip, limit=limit)
     else:
         # END_USER: get regions only from their current session's application
-        if current_user.session_id:
-            session = crud.get_session(db, session_id=current_user.session_id)
-            if session and session.application_id:
-                regions = crud.get_regions_by_application(db, application_id=session.application_id, skip=skip, limit=limit)
-            else:
-                regions = []  # No active session, no access
+        if current_session and current_session.application_id:
+            regions = crud.get_regions_by_application(db, application_id=current_session.application_id, skip=skip, limit=limit)
         else:
-            regions = []  # No session, no access
+            regions = []  # No active session, no access
 
     return regions
 
 
 @router.get("/{region_id}", response_model=schemas.Region)
-def read_region(region_id: int, db: Session = Depends(get_db), current_user: models.WorkspaceUser = Depends(get_current_user)):
+def read_region(region_id: int, db: Session = Depends(get_db), current_user: models.WorkspaceUser = Depends(get_current_user), current_session: models.Session = Depends(get_current_session)):
     """
     Retrieve a specific region by ID.
     ADMIN/DEVELOPER: Can access any region
@@ -66,14 +62,14 @@ def read_region(region_id: int, db: Session = Depends(get_db), current_user: mod
     # Check application access through the region's page
     if db_region.page:
         application_id = db_region.page.application_id
-        application_access_required(application_id)(current_user, None, db)
+        application_access_required(application_id)(current_user, current_session, db)
     # If region has no page, allow access (edge case - could be global region)
 
     return db_region
 
 
 @router.post("/", response_model=schemas.Region, status_code=status.HTTP_201_CREATED)
-def create_region(region: schemas.RegionCreate, db: Session = Depends(get_db), current_user: models.WorkspaceUser = Depends(get_current_user)):
+def create_region(region: schemas.RegionCreate, db: Session = Depends(get_db), current_user: models.WorkspaceUser = Depends(get_current_user), current_session: models.Session = Depends(get_current_session)):
     """
     Create a new region.
     ADMIN/DEVELOPER: Can create regions in any application
@@ -89,7 +85,7 @@ def create_region(region: schemas.RegionCreate, db: Session = Depends(get_db), c
 
         # Check application access
         application_id = page.application_id
-        application_access_required(application_id)(current_user, None, db)
+        application_access_required(application_id)(current_user, current_session, db)
     # If no page_id specified, ADMIN/DEVELOPER/ADMIN can still create (global region)
     # END_USER without page_id would need special handling - for now require page_id
 
@@ -97,7 +93,7 @@ def create_region(region: schemas.RegionCreate, db: Session = Depends(get_db), c
 
 
 @router.put("/{region_id}", response_model=schemas.Region)
-def update_region(region_id: int, region: schemas.RegionUpdate, db: Session = Depends(get_db), current_user: models.WorkspaceUser = Depends(get_current_user)):
+def update_region(region_id: int, region: schemas.RegionUpdate, db: Session = Depends(get_db), current_user: models.WorkspaceUser = Depends(get_current_user), current_session: models.Session = Depends(get_current_session)):
     """
     Update an existing region.
     ADMIN/DEVELOPER: Can update any region
@@ -110,7 +106,7 @@ def update_region(region_id: int, region: schemas.RegionUpdate, db: Session = De
     # Check application access through the region's page
     if db_region.page:
         application_id = db_region.page.application_id
-        application_access_required(application_id)(current_user, None, db)
+        application_access_required(application_id)(current_user, current_session, db)
     # If region has no page, allow ADMIN/DEVELOPER access (global region)
 
     db_region = crud.update_region(db, region_id=region_id, region=region)
@@ -120,7 +116,7 @@ def update_region(region_id: int, region: schemas.RegionUpdate, db: Session = De
 
 
 @router.delete("/{region_id}", response_model=schemas.Region)
-def delete_region(region_id: int, db: Session = Depends(get_db), current_user: models.WorkspaceUser = Depends(get_current_user)):
+def delete_region(region_id: int, db: Session = Depends(get_db), current_user: models.WorkspaceUser = Depends(get_current_user), current_session: models.Session = Depends(get_current_session)):
     """
     Delete a region.
     ADMIN: Can delete any region
@@ -135,7 +131,7 @@ def delete_region(region_id: int, db: Session = Depends(get_db), current_user: m
     # Even though only ADMIN can delete, we still validate app access for consistency
     if db_region.page:
         application_id = db_region.page.application_id
-        application_access_required(application_id)(current_user, None, db)
+        application_access_required(application_id)(current_user, current_session, db)
     # For regions without pages, allow ADMIN access
 
     # Additionally, enforce that only ADMIN can delete (keeping existing stricter rule)

@@ -4,6 +4,7 @@ Renders regions of type 'static_content' which contain raw HTML/CSS/JavaScript.
 """
 from typing import Optional
 from sqlalchemy.orm import Session
+import json
 
 from ...db import models
 
@@ -32,13 +33,14 @@ def render_static_content_region(region: models.Region, db: Session) -> str:
 
     if region.template_options:
         try:
-            options = region.template_options if isinstance(region.template_options, dict) else {}
-            if isinstance(options, str):
-                import json
+            options = region.template_options
+            if isinstance(options, (str, bytes)):
                 options = json.loads(options)
+            if not isinstance(options, dict):
+                options = {}
 
             content = options.get("content", content)
-        except (json.JSONDecodeError, TypeError):
+        except (json.JSONDecodeError, TypeError, ValueError):
             # If template_options is not valid JSON, treat it as raw content
             content = str(region.template_options)
 

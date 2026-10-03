@@ -100,7 +100,7 @@ def _get_radio_options(item: 'PageItem', db: Session) -> List[Tuple[str, str]]:
     # Check if this item has a list of values (LOV) defined
     if getattr(item, 'lov_id', None):
         # Get the LOV definition
-        from ... import models
+        from ...db import models
         lov = db.query(models.Lov).filter(models.Lov.id == item.lov_id).first()
         if lov:
             if getattr(lov, 'is_static', False) and getattr(lov, 'static_values', None):
@@ -113,11 +113,11 @@ def _get_radio_options(item: 'PageItem', db: Session) -> List[Tuple[str, str]]:
                 # Split by commas to get each option
                 pairs = [pair.strip() for pair in static_values.split(",") if pair.strip()]
                 for pair in pairs:
-                    if ":" in pair:
-                        value, label = pair.split(":", 1)
+                    if ";" in pair:
+                        value, label = pair.split(";", 1)
                         options.append((label.strip(), value.strip()))
                     else:
-                        # If no colon, use the same value for label and value
+                        # If no separator, use the same value for label and value
                         options.append((pair.strip(), pair.strip()))
             else:
                 # It's a dynamic LOV - we need to execute the SQL query

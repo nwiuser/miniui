@@ -9,7 +9,7 @@ from .... import schemas
 from ....db import models
 from ....db.session import get_db
 from .... import crud
-from ....core.auth import require_role, application_access_required, get_current_user
+from ....core.auth import require_role, application_access_required, get_current_user, get_current_session
 
 
 router = APIRouter(
@@ -20,7 +20,7 @@ router = APIRouter(
 
 
 @router.get("/", response_model=List[schemas.Lov])
-def read_lovs(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_user: models.WorkspaceUser = Depends(get_current_user)):
+def read_lovs(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_user: models.WorkspaceUser = Depends(get_current_user), current_session: models.Session = Depends(get_current_session)):
     """
     Retrieve LOVs.
     ADMIN/DEVELOPER: Can access all LOVs
@@ -31,21 +31,16 @@ def read_lovs(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), cu
         lovs = crud.get_lovs(db, skip=skip, limit=limit)
     else:
         # END_USER: get LOVs only from their current session's application
-        if current_user.session_id:
-            from .... import crud
-            session = crud.get_session(db, session_id=current_user.session_id)
-            if session and session.application_id:
-                lovs = crud.get_lovs_by_application(db, application_id=session.application_id, skip=skip, limit=limit)
-            else:
-                lovs = []  # No active session, no access
+        if current_session and current_session.application_id:
+            lovs = crud.get_lovs_by_application(db, application_id=current_session.application_id, skip=skip, limit=limit)
         else:
-            lovs = []  # No session, no access
+            lovs = []  # No active session, no access
 
     return lovs
 
 
 @router.post("/", response_model=schemas.Lov, status_code=status.HTTP_201_CREATED)
-def create_lov(lov: schemas.LovCreate, db: Session = Depends(get_db), current_user: models.WorkspaceUser = Depends(get_current_user)):
+def create_lov(lov: schemas.LovCreate, db: Session = Depends(get_db), current_user: models.WorkspaceUser = Depends(get_current_user), current_session: models.Session = Depends(get_current_session)):
     """
     Create new LOV.
     ADMIN/DEVELOPER: Can create LOVs in any application
@@ -53,14 +48,13 @@ def create_lov(lov: schemas.LovCreate, db: Session = Depends(get_db), current_us
     """
     # Check if LOV specifies an item_id
     if hasattr(lov, 'item_id') and lov.item_id:
-        from .... import crud
         item = crud.get_item(db, item_id=lov.item_id)
         if not item:
             raise HTTPException(status_code=404, detail="Item not found")
 
         if item.page:
             application_id = item.page.application_id
-            application_access_required(application_id)(current_user, None, db)
+            application_access_required(application_id)(current_user, current_session, db)
     # If no item_id, it's a global LOV - ADMIN/DEVELOPER can create, END_USER would need special handling
     # For now, we'll allow ADMIN/DEVELOPER and restrict END_USER (they'd need to specify item_id)
 
@@ -68,7 +62,7 @@ def create_lov(lov: schemas.LovCreate, db: Session = Depends(get_db), current_us
 
 
 @router.get("/{lov_id}", response_model=schemas.Lov)
-def read_lov(lov_id: int, db: Session = Depends(get_db), current_user: models.WorkspaceUser = Depends(get_current_user)):
+def read_lov(lov_id: int, db: Session = Depends(get_db), current_user: models.WorkspaceUser = Depends(get_current_user), current_session: models.Session = Depends(get_current_session)):
     """
     Get LOV by ID.
     ADMIN/DEVELOPER: Can access any LOV
@@ -85,17 +79,16 @@ def read_lov(lov_id: int, db: Session = Depends(get_db), current_user: models.Wo
 
     # If LOV has an item_id, check through item->page->application
     if hasattr(db_lov, 'item_id') and db_lov.item_id:
-        from .... import crud
         item = crud.get_item(db, item_id=db_lov.item_id)
         if item and item.page:
             application_id = item.page.application_id
-            application_access_required(application_id)(current_user, None, db)
+            application_access_required(application_id)(current_user, current_session, db)
 
     return db_lov
 
 
 @router.get("/name/{lov_name}", response_model=schemas.Lov)
-def read_lov_by_name(lov_name: str, db: Session = Depends(get_db), current_user: models.WorkspaceUser = Depends(get_current_user)):
+def read_lov_by_name(lov_name: str, db: Session = Depends(get_db), current_user: models.WorkspaceUser = Depends(get_current_user), current_session: models.Session = Depends(get_current_session)):
     """
     Get LOV by name.
     ADMIN/DEVELOPER: Can access any LOV
@@ -108,17 +101,16 @@ def read_lov_by_name(lov_name: str, db: Session = Depends(get_db), current_user:
     # Apply same application access logic as get_lov
     # If LOV has an item_id, check through item->page->application
     if hasattr(db_lov, 'item_id') and db_lov.item_id:
-        from .... import crud
         item = crud.get_item(db, item_id=db_lov.item_id)
         if item and item.page:
             application_id = item.page.application_id
-            application_access_required(application_id)(current_user, None, db)
+            application_access_required(application_id)(current_user, current_session, db)
 
     return db_lov
 
 
 @router.put("/{lov_id}", response_model=schemas.Lov)
-def update_lov(lov_id: int, lov: schemas.LovUpdate, db: Session = Depends(get_db), current_user: models.WorkspaceUser = Depends(get_current_user)):
+def update_lov(lov_id: int, lov: schemas.LovUpdate, db: Session = Depends(get_db), current_user: models.WorkspaceUser = Depends(get_current_user), current_session: models.Session = Depends(get_current_session)):
     """
     Update an LOV.
     ADMIN/DEVELOPER: Can update any LOV
@@ -130,11 +122,10 @@ def update_lov(lov_id: int, lov: schemas.LovUpdate, db: Session = Depends(get_db
 
     # Apply application access check if LOV has item association
     if hasattr(db_lov, 'item_id') and db_lov.item_id:
-        from .... import crud
         item = crud.get_item(db, item_id=db_lov.item_id)
         if item and item.page:
             application_id = item.page.application_id
-            application_access_required(application_id)(current_user, None, db)
+            application_access_required(application_id)(current_user, current_session, db)
 
     db_lov = crud.update_lov(db=db, lov_id=lov_id, lov=lov)
     if db_lov is None:

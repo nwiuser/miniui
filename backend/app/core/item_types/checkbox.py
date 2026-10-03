@@ -29,7 +29,7 @@ def render_checkbox_item(item, value: str = "") -> str:
                 checked = True
 
     # Build the input element
-    html_str = "<input type='checkbox' name='" + item.name + "' id='" + item.name + "'"
+    input_str = "<input type='checkbox' name='" + item.name + "' id='" + item.name + "'"
 
     # Add CSS classes
     css_classes = ["form-checkbox"]
@@ -40,40 +40,40 @@ def render_checkbox_item(item, value: str = "") -> str:
     if element_css_class:
         css_classes.append(element_css_class)
     if css_classes:
-        html_str += " class='" + ' '.join(css_classes) + "'"
+        input_str += " class='" + ' '.join(css_classes) + "'"
 
     # Add inline styles
     element_style = getattr(item, 'element_style', None)
     if element_style:
-        html_str += " style='" + html.escape(element_style) + "'"
+        input_str += " style='" + html.escape(element_style) + "'"
 
     # Add readonly/disabled attributes
     if getattr(item, 'readonly', False):
-        html_str += " readonly"
+        input_str += " readonly"
     if getattr(item, 'disabled', False):
-        html_str += " disabled"
+        input_str += " disabled"
 
     # Add checked attribute
     if checked:
-        html_str += " checked"
+        input_str += " checked"
 
     # Add required attribute (though checkboxes are rarely required in the traditional sense)
     if getattr(item, 'is_required', False):
-        html_str += " required"
+        input_str += " required"
 
     # Add data attributes for AJAX etc.
-    html_str += " data-item-id='" + str(item.id) + "'"
+    input_str += " data-item-id='" + str(item.id) + "'"
 
     # Add the value attribute (what gets submitted when checked)
     checkbox_value = getattr(item, 'checkbox_value', None)
     if checkbox_value:
-        html_str += " value='" + html.escape(str(checkbox_value)) + "'"
+        input_str += " value='" + html.escape(str(checkbox_value)) + "'"
     else:
         # Default value for checkboxes
-        html_str += " value='Y'"
+        input_str += " value='Y'"
 
     # Close the input tag
-    html_str += "/>"
+    input_str += "/>"
 
     # Wrap with label for better accessibility
     label_html = ""
@@ -82,11 +82,11 @@ def render_checkbox_item(item, value: str = "") -> str:
         escaped_label = html.escape(str(label))
         label_html = "<label for='" + item.name + "'>" + escaped_label + "</label>"
 
-    # For checkboxes, the label usually comes after the input
+    # For checkboxes, the label usually comes before the input
     html_str = "<div class='checkbox-item'>"
     if label_html:
         html_str += label_html + " "
-    html_str += html_str
+    html_str += input_str
     html_str += "</div>"
 
     # If there's a post-text element, add it after
@@ -96,3 +96,4 @@ def render_checkbox_item(item, value: str = "") -> str:
         html_str += "<span class='post-text'> " + escaped_post + "</span>"
 
     return html_str
+

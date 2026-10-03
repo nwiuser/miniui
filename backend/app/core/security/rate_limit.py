@@ -21,6 +21,14 @@ class RateLimitStore:
     def record_attempt(self, key: str):
         self._attempts[key].append(time.time())
 
+    def reset(self):
+        """Drop all recorded attempts.
+
+        The store is process-global, so tests (and any administrative reset)
+        need a way to clear it without reaching into ``_attempts``.
+        """
+        self._attempts.clear()
+
 
 rate_limit_store = RateLimitStore()
 

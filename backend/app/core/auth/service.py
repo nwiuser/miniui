@@ -41,7 +41,9 @@ class AuthService:
             # (but we don't have a user record to update)
             return None
 
-        # Check if account is locked
+        # Check if account is locked. A locked account stays locked even with the
+        # right password; an ADMIN unlocks it through the workspace-user update
+        # endpoint, which is the only recovery path on purpose.
         if user.account_locked:
             return None
 
@@ -57,9 +59,6 @@ class AuthService:
 
         # Password correct - reset failed attempts and return user
         user.failed_access_attempts = 0
-        # Ensure account is unlocked (in case it was locked previously)
-        if user.account_locked:
-            user.account_locked = False
         self.db.commit()
 
         # Check if password needs to be changed on first use

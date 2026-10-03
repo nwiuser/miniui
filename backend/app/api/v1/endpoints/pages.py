@@ -13,7 +13,7 @@ from ....db import models
 from ....db.session import get_db
 from ....core.rendering.service import RenderingService
 from ....core.session.service import SessionService
-from ....core.auth import get_current_user, get_current_user_optional, require_role, application_access_required, get_current_application, verify_application_access
+from ....core.auth import get_current_user, get_current_user_optional, require_role, application_access_required, get_current_application, get_current_session, verify_application_access
 from .... import crud
 
 
@@ -93,145 +93,10 @@ def _get_session_for_page(db: Session, session_id: str, page: models.Page) -> Op
     return session
 
 
-@router.get("/{application_alias}/{page_number}", response_class=HTMLResponse)
-async def show_page(
-    application_alias: str,
-    page_number: int,
-    session_id: Optional[str] = None,
-    request: Request = None,
-    db: Session = Depends(get_db)
-):
-    """
-    Show a page by rendering it from metadata.
-
-    Public pages (``is_public=True``) render without authentication. Protected
-    pages require a valid session bound to the page's application.
-    """
-    # Get the application by alias
-    application = db.query(models.Application).filter(
-        models.Application.alias == application_alias,
-        models.Application.is_active == True
-    ).first()
-
-    if not application:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Application with alias '{application_alias}' not found"
-        )
-
-    # Get page by application ID and page number
-    page = db.query(models.Page).filter(
-        models.Page.application_id == application.id,
-        models.Page.page_number == page_number,
-        models.Page.is_active == True
-    ).first()
-
-    if not page:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Page {page_number} not found in application '{application_alias}'"
-        )
-
-    # Resolve the session (explicit param or cookie) and enforce public/protected
-    resolved_session_id = _resolve_session_id(request, session_id)
-    _validate_page_session(db, resolved_session_id, page)
-
-    # Create rendering service
-    rendering_service = RenderingService(db)
-
-    # Show the page
-    result = rendering_service.show_page(
-        application_alias=application_alias,
-        page_number=page_number,
-        session_id=resolved_session_id,
-        request=request
-    )
-
-    # Return the HTML and persist the session cookie
-    response = HTMLResponse(content=result["html"])
-    session_cookie = result.get("session_id") or resolved_session_id
-    if session_cookie:
-        _set_session_cookie(response, session_cookie)
-    return response
-
-
-@router.post("/{application_alias}/{page_number}")
-async def accept_page(
-    application_alias: str,
-    page_number: int,
-    session_id: Optional[str] = Form(None),
-    request: Request = None,
-    db: Session = Depends(get_db)
-):
-    """
-    Accept a page submission (form post).
-
-    Requires a valid session for processing. Protected pages enforce the
-    session is bound to the page's application.
-    """
-    # Get the application by alias
-    application = db.query(models.Application).filter(
-        models.Application.alias == application_alias,
-        models.Application.is_active == True
-    ).first()
-
-    if not application:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Application with alias '{application_alias}' not found"
-        )
-
-    # Get page by application ID and page number
-    page = db.query(models.Page).filter(
-        models.Page.application_id == application.id,
-        models.Page.page_number == page_number,
-        models.Page.is_active == True
-    ).first()
-
-    if not page:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Page {page_number} not found in application '{application_alias}'"
-        )
-
-    # Resolve the session (form field or cookie) and enforce public/protected
-    resolved_session_id = _resolve_session_id(request, session_id)
-    _validate_page_session(db, resolved_session_id, page)
-
-    # Get form data from the request
-    form = await request.form()
-    form_data = dict(form)
-
-    # Create rendering service
-    rendering_service = RenderingService(db)
-
-    # Accept the page
-    result = rendering_service.accept_page(
-        application_alias=application_alias,
-        page_number=page_number,
-        session_id=resolved_session_id,
-        form_data=form_data
-    )
-
-    # If there was a redirect URL, return a redirect response
-    if result.get("success") and result.get("redirect_url"):
-        response = RedirectResponse(url=result["redirect_url"], status_code=303)
-        if resolved_session_id:
-            _set_session_cookie(response, resolved_session_id)
-        return response
-
-    # Otherwise, return JSON result
-    response = Response(
-        content=json.dumps(result),
-        media_type="application/json",
-    )
-    if resolved_session_id:
-        _set_session_cookie(response, resolved_session_id)
-    return response
-
-
-# Builder endpoints - require authentication and appropriate roles
-@router.get("/builder/{application_id}")
+@router.get(
+    "/builder/{application_id}",
+    dependencies=[Depends(require_role("ADMIN", "DEVELOPER"))],
+)
 def get_page_builder_context(
     application_id: int,
     db: Session = Depends(get_db),
@@ -259,14 +124,15 @@ def get_page_builder_context(
 def create_page_builder(
     page: schemas.PageCreate,
     db: Session = Depends(get_db),
-    current_user: models.WorkspaceUser = Depends(get_current_user)
+    current_user: models.WorkspaceUser = Depends(require_role("ADMIN", "DEVELOPER")),
+    current_session: models.Session = Depends(get_current_session),
 ):
     """
     Create a new page (requires ADMIN or DEVELOPER role).
     """
     # A dependency cannot read a body sub-field, so enforce per-application
     # access for the page's application_id here (matches existing manual checks).
-    application_access_required(page.application_id)(current_user, None, db)
+    application_access_required(page.application_id)(current_user, current_session, db)
     return crud.create_page(db=db, page=page)
 
 
@@ -338,3 +204,150 @@ def delete_page_builder(
     if db_page is None:
         raise HTTPException(status_code=404, detail="Page not found")
     return db_page
+
+
+# Runtime routes. These are declared after the builder routes on purpose:
+# "/builder/{application_id}" would otherwise be swallowed by
+# "/{application_alias}/{page_number}" and answer with "application 'builder'
+# not found", leaving the builder unable to load its context.
+@router.get("/{application_alias}/{page_number}", response_class=HTMLResponse)
+async def show_page(
+    application_alias: str,
+    page_number: int,
+    session_id: Optional[str] = None,
+    request: Request = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Show a page by rendering it from metadata.
+
+    Public pages (``is_public=True``) render without authentication. Protected
+    pages require a valid session bound to the page's application.
+    """
+    # Get the application by alias
+    application = db.query(models.Application).filter(
+        models.Application.alias == application_alias,
+        models.Application.is_active == True
+    ).first()
+
+    if not application:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Application with alias '{application_alias}' not found"
+        )
+
+    # Get page by application ID and page number
+    page = db.query(models.Page).filter(
+        models.Page.application_id == application.id,
+        models.Page.page_number == page_number,
+        models.Page.is_active == True
+    ).first()
+
+    if not page:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Page {page_number} not found in application '{application_alias}'"
+        )
+
+    # Resolve the session (explicit param or cookie) and enforce public/protected
+    resolved_session_id = _resolve_session_id(request, session_id)
+    _validate_page_session(db, resolved_session_id, page)
+
+    # Create rendering service
+    rendering_service = RenderingService(db)
+
+    # Show the page
+    result = rendering_service.show_page(
+        application_alias=application_alias,
+        page_number=page_number,
+        session_id=resolved_session_id,
+        request=request
+    )
+
+    # Return the HTML and persist the session cookie
+    response = HTMLResponse(content=result["html"])
+    session_cookie = result.get("session_id") or resolved_session_id
+    if session_cookie:
+        _set_session_cookie(response, session_cookie)
+    return response
+
+
+@router.post("/{application_alias}/{page_number}")
+async def accept_page(
+    application_alias: str,
+    page_number: int,
+    session_id: Optional[str] = Form(None),
+    p_session_id: Optional[str] = Form(None),
+    request: Request = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Accept a page submission (form post).
+
+    Requires a valid session for processing. Protected pages enforce the
+    session is bound to the page's application. ``p_session_id`` is accepted as
+    an alias of ``session_id`` for APEX-style form payloads.
+    """
+    # Get the application by alias
+    application = db.query(models.Application).filter(
+        models.Application.alias == application_alias,
+        models.Application.is_active == True
+    ).first()
+
+    if not application:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Application with alias '{application_alias}' not found"
+        )
+
+    # Get page by application ID and page number
+    page = db.query(models.Page).filter(
+        models.Page.application_id == application.id,
+        models.Page.page_number == page_number,
+        models.Page.is_active == True
+    ).first()
+
+    if not page:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Page {page_number} not found in application '{application_alias}'"
+        )
+
+# Resolve the session (form field or cookie) and enforce public/protected
+    resolved_session_id = _resolve_session_id(request, session_id or p_session_id)
+    _validate_page_session(db, resolved_session_id, page)
+
+    # Get form data from the request
+    form = await request.form()
+    form_data = {
+        key: value
+        for key, value in form.items()
+        if key not in {"session_id", "p_session_id"}
+    }
+
+    # Create rendering service
+    rendering_service = RenderingService(db)
+
+    # Accept the page
+    result = rendering_service.accept_page(
+        application_alias=application_alias,
+        page_number=page_number,
+        session_id=resolved_session_id,
+        form_data=form_data
+    )
+
+    # If there was a redirect URL, return a redirect response
+    if result.get("success") and result.get("redirect_url"):
+        response = RedirectResponse(url=result["redirect_url"], status_code=303)
+        if resolved_session_id:
+            _set_session_cookie(response, resolved_session_id)
+        return response
+
+    # Otherwise, return JSON result
+    response = Response(
+        content=json.dumps(result),
+        media_type="application/json",
+    )
+    if resolved_session_id:
+        _set_session_cookie(response, resolved_session_id)
+    return response

@@ -9,6 +9,7 @@ from typing import List
 from .... import crud, schemas
 from ....db import models
 from ....core.auth import get_current_user, require_role, verify_application_access, get_current_session
+from ....core.cache import application_metadata_cache
 from ....db.session import get_db
 
 router = APIRouter(
@@ -65,6 +66,7 @@ def update_application(application_id: int, application: schemas.ApplicationUpda
     db_application = crud.update_application(db=db, application_id=application_id, application=application)
     if db_application is None:
         raise HTTPException(status_code=404, detail="Application not found")
+    application_metadata_cache.invalidate(application_id)
     return db_application
 
 
@@ -77,24 +79,19 @@ def delete_application(application_id: int, db: Session = Depends(get_db), curre
     db_application = crud.delete_application(db=db, application_id=application_id)
     if db_application is None:
         raise HTTPException(status_code=404, detail="Application not found")
+    application_metadata_cache.invalidate(application_id)
     return db_application
 
 
-@router.get("/{application_id}/metadata", response_model=schemas.ApplicationMetadata)
-def get_application_metadata(
-    application_id: int,
-    db: Session = Depends(get_db),
-    current_user: models.WorkspaceUser = Depends(require_role("ADMIN", "DEVELOPER")),
-):
-    """
-    Export a complete application definition (pages, regions, items, processes,
-    computations, validations) as JSON for external consumption.
+def _build_application_metadata(db: Session, application_id: int) -> dict:
+    """Assemble the full application definition as plain JSON-ready data.
 
-    Secured with the same authentication system; ADMIN/DEVELOPER only.
+    Returns ``None`` when the application does not exist. The result contains no
+    ORM objects, which is what makes it safe to cache across requests.
     """
     application = crud.get_application(db, application_id=application_id)
     if application is None:
-        raise HTTPException(status_code=404, detail="Application not found")
+        return None
 
     def _column_dict(obj):
         if obj is None:
@@ -132,3 +129,28 @@ def get_application_metadata(
         })
 
     return {"application": _column_dict(application), "pages": page_defs}
+
+
+@router.get("/{application_id}/metadata", response_model=schemas.ApplicationMetadata)
+def get_application_metadata(
+    application_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.WorkspaceUser = Depends(require_role("ADMIN", "DEVELOPER")),
+):
+    """
+    Export a complete application definition (pages, regions, items, processes,
+    computations, validations) as JSON for external consumption.
+
+    Secured with the same authentication system; ADMIN/DEVELOPER only. The
+    assembled definition is cached for a few seconds (``METADATA_CACHE_TTL``), so
+    a heavy export does not hit the database on every poll. Edits may therefore
+    take up to that TTL to show up here; the builder endpoints used for editing
+    always read live data.
+    """
+    metadata = application_metadata_cache.get_or_set(
+        application_id,
+        lambda: _build_application_metadata(db, application_id),
+    )
+    if metadata is None:
+        raise HTTPException(status_code=404, detail="Application not found")
+    return metadata

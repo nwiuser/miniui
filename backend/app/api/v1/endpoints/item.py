@@ -9,7 +9,7 @@ from .... import schemas
 from ....db import models
 from ....db.session import get_db
 from .... import crud
-from ....core.auth import require_role, application_access_required, get_current_user
+from ....core.auth import require_role, application_access_required, get_current_user, get_current_session
 
 
 router = APIRouter(
@@ -20,25 +20,61 @@ router = APIRouter(
 
 
 @router.get("/", response_model=List[schemas.Item])
-def read_items(skip: int = 0, limit: int = 100, page_id: Optional[int] = None, db: Session = Depends(get_db)):
+def read_items(skip: int = 0, limit: int = 100, page_id: Optional[int] = None, db: Session = Depends(get_db), current_user: models.WorkspaceUser = Depends(get_current_user), current_session: models.Session = Depends(get_current_session)):
     """
     Retrieve items. Optionally filter by page_id.
+    ADMIN/DEVELOPER: Can access all items
+    END_USER: Can only access items in their current session's application
     """
+    # If filtering by page_id, check application access first
     if page_id:
-        items = crud.get_items_by_page(db, page_id=page_id, skip=skip, limit=limit)
+        page = crud.get_page(db, page_id=page_id)
+        if page:
+            application_access_required(page.application_id)(current_user, current_session, db)
+
+    # For ADMIN/DEVELOPER, show all; for END_USER, restrict to their application
+    if current_user.administrator_role in ["ADMIN", "DEVELOPER"]:
+        if page_id:
+            items = crud.get_items_by_page(db, page_id=page_id, skip=skip, limit=limit)
+        else:
+            items = crud.get_items(db, skip=skip, limit=limit)
     else:
-        items = crud.get_items(db, skip=skip, limit=limit)
+        if not (current_session and current_session.application_id):
+            return []
+        page_ids = [
+            page.id
+            for page in crud.get_pages_by_application(
+                db, application_id=current_session.application_id
+            )
+        ]
+        if not page_ids:
+            return []
+        items = (
+            db.query(models.PageItem)
+            .filter(models.PageItem.page_id.in_(page_ids))
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
+
     return items
 
 
 @router.get("/{item_id}", response_model=schemas.Item)
-def read_item(item_id: int, db: Session = Depends(get_db)):
+def read_item(item_id: int, db: Session = Depends(get_db), current_user: models.WorkspaceUser = Depends(get_current_user), current_session: models.Session = Depends(get_current_session)):
     """
     Retrieve a specific item by ID.
+    ADMIN/DEVELOPER: Can access any item
+    END_USER: Can only access items in their current session's application
     """
     db_item = crud.get_item(db, item_id=item_id)
     if db_item is None:
         raise HTTPException(status_code=404, detail="Item not found")
+
+    # Check application access through the item's page
+    if db_item.page:
+        application_access_required(db_item.page.application_id)(current_user, current_session, db)
+
     return db_item
 
 
@@ -87,7 +123,7 @@ def update_item(item_id: int, item: schemas.ItemUpdate, db: Session = Depends(ge
 
 
 @router.delete("/{item_id}", response_model=schemas.Item)
-def delete_item(item_id: int, db: Session = Depends(get_db), current_user: models.WorkspaceUser = Depends(get_current_user)):
+def delete_item(item_id: int, db: Session = Depends(get_db), current_user: models.WorkspaceUser = Depends(get_current_user), current_session: models.Session = Depends(get_current_session)):
     """
     Delete an item.
     Only ADMIN role can delete items.
@@ -115,7 +151,7 @@ def delete_item(item_id: int, db: Session = Depends(get_db), current_user: model
                 raise HTTPException(status_code=404, detail="Application not found")
         else:
             # END_USER can only delete items in their current session's application
-            application_access_required(application_id)(current_user, None, db)
+            application_access_required(application_id)(current_user, current_session, db)
 
     # Perform the delete operation
     db_item = crud.delete_item(db=db, item_id=item_id)

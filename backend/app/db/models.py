@@ -38,6 +38,11 @@ class Page(Base):
     processes = relationship("PageProcess", back_populates="page", cascade="all, delete-orphan")
     computations = relationship("Computation", back_populates="page", cascade="all, delete-orphan")
 
+    # Every runtime request resolves a page by (application_id, page_number).
+    __table_args__ = (
+        Index("ix_apex_pages_application_id_page_number", "application_id", "page_number"),
+    )
+
 class Region(Base):
     __tablename__ = "apex_regions"
     
@@ -50,9 +55,14 @@ class Region(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     # Relationships
     page = relationship("Page", back_populates="regions")
+
+    # Regions are always loaded per page while rendering.
+    __table_args__ = (
+        Index("ix_apex_regions_page_id", "page_id"),
+    )
 
 class PageItem(Base):
     __tablename__ = "apex_page_items"
@@ -69,9 +79,14 @@ class PageItem(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     # Relationships
     page = relationship("Page", back_populates="items")
+
+    # Page items are always loaded per page while rendering.
+    __table_args__ = (
+        Index("ix_apex_page_items_page_id", "page_id"),
+    )
 
 class PageProcess(Base):
     __tablename__ = "apex_page_processes"
@@ -82,13 +97,20 @@ class PageProcess(Base):
     process_type = Column(String(50), nullable=False)  # sql, plsql, reset_pagination, etc.
     process_code = Column(Text)  # The actual SQL/PLSQL code or Python code
     execution_sequence = Column(Integer, default=10)  # Order of execution
-    execution_point = Column(String(20), default="ON_SUBMIT_BEFORE_COMPUTATION")
+    # Long enough for the default: "ON_SUBMIT_BEFORE_COMPUTATION" is 30
+    # characters and did not fit in the previous String(20).
+    execution_point = Column(String(50), default="ON_SUBMIT_BEFORE_COMPUTATION")
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
     page = relationship("Page", back_populates="processes")
+
+    # Processes are always loaded per page while rendering.
+    __table_args__ = (
+        Index("ix_apex_page_processes_page_id", "page_id"),
+    )
 
 class Session(Base):
     __tablename__ = "apex_sessions"
@@ -106,6 +128,11 @@ class Session(Base):
     application = relationship("Application")
     user = relationship("WorkspaceUser")
     items = relationship("SessionStateItem", back_populates="session", cascade="all, delete-orphan")
+
+    # Sessions are always listed per application.
+    __table_args__ = (
+        Index("ix_apex_sessions_application_id", "application_id"),
+    )
 
 
 class SessionStateItem(Base):
@@ -135,7 +162,7 @@ class RestDataSource(Base):
     application_id = Column(Integer, ForeignKey("apex_applications.id"), nullable=False)
     name = Column(String(255), nullable=False)
     url = Column(String(2000), nullable=False)
-    method = Column(String(10), default="GET")  # GET, POST, PUT, DELETE
+    method = Column(String(10), default="GET", nullable=False)  # GET, POST, PUT, DELETE
     headers = Column(JSON)  # Optional request headers as {name: value}
     query_params = Column(JSON)  # Optional query parameters as {name: value}
     request_body = Column(JSON)  # Optional JSON body for POST/PUT/DELETE
@@ -168,6 +195,11 @@ class Validation(Base):
 
     # Relationships
     page = relationship("Page")
+
+    # Validations are always loaded per page on submit.
+    __table_args__ = (
+        Index("ix_apex_validations_page_id", "page_id"),
+    )
 
 
 class Lov(Base):
@@ -230,3 +262,8 @@ class Computation(Base):
 
     # Relationships
     page = relationship("Page", back_populates="computations")
+
+    # Computations are always loaded per page while rendering.
+    __table_args__ = (
+        Index("ix_apex_computations_page_id", "page_id"),
+    )
