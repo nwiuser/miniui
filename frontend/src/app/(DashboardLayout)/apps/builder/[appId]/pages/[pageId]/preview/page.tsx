@@ -78,6 +78,25 @@ export default function PreviewPage() {
     }
   };
 
+  const buildStandaloneUrl = () => {
+    if (page?.page_number == null) return null;
+    const token = typeof window !== 'undefined' ? window.localStorage.getItem('miniui_token') : null;
+    return `/app/${application?.alias}/${page?.page_number}${
+      token ? `?session_id=${encodeURIComponent(token)}` : ''
+    }`;
+  };
+
+  // One standalone tab per application: a named window is reused (and
+  // navigated to the latest URL, so it always shows fresh content) instead
+  // of opening a new tab on every click.
+  const openStandalone = () => {
+    const url = buildStandaloneUrl();
+    if (!url) return;
+    const target = `miniui-standalone-${application?.alias ?? appId}`;
+    const win = window.open(url, target);
+    if (win) win.focus();
+  };
+
   if (loading) {
     return (
       <div className="py-16 text-center text-gray-500">
@@ -90,7 +109,7 @@ export default function PreviewPage() {
   return (
     <div className="space-y-4">
       {/* Top Controls Bar */}
-      <div className="bg-white dark:bg-dark-card p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="bg-white dark:bg-darkgray p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
             <Link href="/" className="hover:underline">Dashboard</Link>
@@ -143,19 +162,24 @@ export default function PreviewPage() {
           >
             ← Back to Page Builder
           </Link>
-          <a
-            href={`/app/${application?.alias}/${page?.page_number}${
-              typeof window !== 'undefined' && window.localStorage.getItem('miniui_token')
-                ? `?session_id=${encodeURIComponent(window.localStorage.getItem('miniui_token') || '')}`
-                : ''
-            }`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl flex items-center gap-1 transition"
-          >
-            Open Standalone
-            <Icon icon="solar:export-bold" />
-          </a>
+          {page?.page_number != null ? (
+            <button
+              onClick={openStandalone}
+              title="Opens once per application and always shows the latest saved page"
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl flex items-center gap-1 transition"
+            >
+              Open Standalone
+              <Icon icon="solar:export-bold" />
+            </button>
+          ) : (
+            <span
+              title="Waiting for page metadata to load"
+              className="px-4 py-2 bg-blue-300 text-white text-xs font-semibold rounded-xl flex items-center gap-1 cursor-not-allowed"
+            >
+              Open Standalone
+              <Icon icon="solar:export-bold" />
+            </span>
+          )}
         </div>
       </div>
 
@@ -177,11 +201,18 @@ export default function PreviewPage() {
       )}
 
       {/* Frame Container */}
-      <div className="bg-white dark:bg-dark-card p-6 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm min-h-[700px]">
+      {/* NOTE: backend returns a FULL HTML document (with its own global
+          stylesheet apexos.css). It must be isolated in an iframe — injecting
+          it via dangerouslySetInnerHTML would load apexos.css into the
+          dashboard page itself, where its global `* { margin: 0; padding: 0 }`
+          reset overrides Tailwind utilities and breaks the header/sidebar
+          layout. */}
+      <div className="bg-white dark:bg-darkgray p-6 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm min-h-[700px]">
         <div className={getViewportClass()}>
-          <div
-            className="preview-output p-4 min-h-[600px]"
-            dangerouslySetInnerHTML={{ __html: htmlContent }}
+          <iframe
+            title={`Preview of ${application?.name ?? 'application'} — ${page?.name ?? 'page'}`}
+            srcDoc={htmlContent}
+            className="w-full h-[600px] bg-white rounded-xl border border-gray-100 dark:border-gray-700"
           />
         </div>
       </div>

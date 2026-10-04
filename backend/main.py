@@ -34,6 +34,28 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self';"
         return response
 
+# Trailing-slash normalization middleware.
+# List routers declare `@router.get("/")` (canonical path WITH trailing slash)
+# while clients call them WITHOUT it (and vice versa for a few routes).
+# Starlette answers those with a 307 redirect to an absolute URL built from
+# the backend's own host. Behind the Next.js rewrite proxy that host is the
+# internal `backend:8000`, unreachable from browsers, so fetch() fails with a
+# network TypeError ("Failed to fetch"). Rewriting the path to the registered
+# variant up-front serves both spellings with a 200 and no redirect.
+class TrailingSlashNormalizationMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+        if len(path) > 1:
+            alternate = path + "/" if not path.endswith("/") else path.rstrip("/")
+            if not self._has_route(path) and self._has_route(alternate):
+                request.scope["path"] = alternate
+        return await call_next(request)
+
+    @staticmethod
+    def _has_route(path: str) -> bool:
+        return any(getattr(route, "path", None) == path for route in app.routes)
+
+
 # Add security headers middleware
 app.add_middleware(SecurityHeadersMiddleware)
 
@@ -114,6 +136,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Trailing-slash normalization must run before the other middlewares see the
+# path (middlewares execute in reverse order of addition), so it is added
+# last: CSRF exemptions and rate-limit path checks then observe the canonical
+# spelling too.
+app.add_middleware(TrailingSlashNormalizationMiddleware)
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")

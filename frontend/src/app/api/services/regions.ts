@@ -4,8 +4,9 @@ export interface Region {
   id?: number;
   _tempId?: string;
   name: string;
-  region_type: 'static_content' | 'form' | 'report' | string;
+  region_type: 'static_content' | 'form' | 'report' | 'cards' | string;
   source?: string;
+  template_options?: Record<string, unknown> | null;
   position?: number;
   page_id?: number;
   is_active?: boolean;

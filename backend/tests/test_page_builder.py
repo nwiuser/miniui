@@ -67,6 +67,45 @@ class TestBuilderContext:
         assert response.status_code == 403
 
 
+class TestBuilderGetPage:
+    def test_returns_single_page_not_context(self, client, auth_headers, make_app, make_page):
+        app = make_app(alias="BUILDERGET1")
+        page = make_page(app, page_number=1, name="Home")
+        headers = auth_headers(application=app)
+
+        response = client.get(f"/api/v1/pages/builder/page/{page.id}", headers=headers)
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["id"] == page.id
+        assert body["name"] == "Home"
+        assert "application" not in body
+        assert "pages" not in body
+
+    def test_unknown_page_returns_404(self, client, auth_headers, make_app):
+        app = make_app()
+        headers = auth_headers(application=app)
+
+        response = client.get("/api/v1/pages/builder/page/999999", headers=headers)
+
+        assert response.status_code == 404
+
+    def test_requires_authentication(self, client, make_app, make_page):
+        app = make_app(alias="BUILDERGET2")
+        page = make_page(app, page_number=1)
+
+        assert client.get(f"/api/v1/pages/builder/page/{page.id}").status_code == 401
+
+    def test_end_user_cannot_fetch_page(self, client, auth_headers, make_app, make_page):
+        app = make_app()
+        page = make_page(app, page_number=1)
+        headers = auth_headers(role="END_USER", application=app)
+
+        response = client.get(f"/api/v1/pages/builder/page/{page.id}", headers=headers)
+
+        assert response.status_code == 403
+
+
 class TestBuilderCreatePage:
     def test_admin_creates_page(self, client, auth_headers, make_app):
         app = make_app(alias="CREATE1")

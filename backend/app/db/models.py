@@ -58,6 +58,9 @@ class Region(Base):
 
     # Relationships
     page = relationship("Page", back_populates="regions")
+    # Items placed inside this region (PageItem.region_id is nullable:
+    # page-level items belong to no region).
+    items = relationship("PageItem", back_populates="region")
 
     # Regions are always loaded per page while rendering.
     __table_args__ = (
@@ -69,6 +72,9 @@ class PageItem(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     page_id = Column(Integer, ForeignKey("apex_pages.id"), nullable=False)
+    # Optional containing region (set when the item is dropped into a region
+    # in the visual builder; NULL = page-level item).
+    region_id = Column(Integer, ForeignKey("apex_regions.id", ondelete="SET NULL"), nullable=True)
     name = Column(String(255), nullable=False)  # Item name (e.g., P1_FIELD_NAME)
     alias = Column(String(100))  # Human-readable alias
     item_type = Column(String(50), nullable=False)  # text, textarea, select, date, etc.
@@ -82,10 +88,12 @@ class PageItem(Base):
 
     # Relationships
     page = relationship("Page", back_populates="items")
+    region = relationship("Region", back_populates="items")
 
     # Page items are always loaded per page while rendering.
     __table_args__ = (
         Index("ix_apex_page_items_page_id", "page_id"),
+        Index("ix_apex_page_items_region_id", "region_id"),
     )
 
 class PageProcess(Base):

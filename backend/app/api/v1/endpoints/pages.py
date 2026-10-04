@@ -120,6 +120,39 @@ def get_page_builder_context(
     }
 
 
+@router.get(
+    "/builder/page/{page_id}",
+    response_model=schemas.Page,
+)
+def get_page_builder(
+    page_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.WorkspaceUser = Depends(get_current_user),
+):
+    """
+    Get a single page for the visual builder (requires ADMIN or DEVELOPER).
+
+    This is separate from ``GET /builder/{application_id}`` (which returns the
+    whole builder context for an application) so a page id is never mistaken
+    for an application id.
+    """
+    db_page = crud.get_page(db, page_id=page_id)
+    if db_page is None:
+        raise HTTPException(status_code=404, detail="Page not found")
+
+    if current_user.administrator_role not in ["ADMIN", "DEVELOPER"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions"
+        )
+
+    application = crud.get_application(db, application_id=db_page.application_id)
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    return db_page
+
+
 @router.post("/builder/", response_model=schemas.Page)
 def create_page_builder(
     page: schemas.PageCreate,
@@ -264,8 +297,11 @@ async def show_page(
         request=request
     )
 
-    # Return the HTML and persist the session cookie
+    # Return the HTML and persist the session cookie. Rendered fresh from
+    # metadata on every request, so forbid caching: the builder's standalone
+    # view must show the latest saved state without a manual refresh.
     response = HTMLResponse(content=result["html"])
+    response.headers["Cache-Control"] = "no-store, max-age=0"
     session_cookie = result.get("session_id") or resolved_session_id
     if session_cookie:
         _set_session_cookie(response, session_cookie)

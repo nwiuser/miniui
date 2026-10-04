@@ -3,6 +3,9 @@ import { apiClient } from '../client';
 export interface PageItem {
   id?: number;
   _tempId?: string;
+  // Client-only: tracks the unsaved region a dropped item belongs to until
+  // Save Page assigns real ids. Never sent to the API.
+  _tempRegionId?: string;
   name: string;
   alias?: string;
   item_type: 'text' | 'textarea' | 'select' | 'checkbox' | 'date_picker' | 'hidden' | 'display_only' | string;
@@ -15,7 +18,7 @@ export interface PageItem {
   is_active?: boolean;
 }
 
-export interface ItemCreate extends Omit<PageItem, 'id' | '_tempId'> {}
+export interface ItemCreate extends Omit<PageItem, 'id' | '_tempId' | '_tempRegionId'> {}
 export interface ItemUpdate extends Partial<ItemCreate> {}
 
 export const itemService = {

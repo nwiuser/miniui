@@ -42,6 +42,17 @@ export default function VisualPageBuilder() {
   // Drag and drop / Property Inspector state
   const [dragPayload, setDragPayload] = useState<{ kind: 'region' | 'item'; data: any } | null>(null);
   const [selectedElement, setSelectedElement] = useState<{ kind: 'region' | 'item'; id?: number; tempId?: string } | null>(null);
+  const [cardsJsonError, setCardsJsonError] = useState<string | null>(null);
+
+  // Regions from the API carry their config in template_options; surface the
+  // report SQL back onto the canvas `source` field for display/editing.
+  const normalizeRegion = (reg: Region): Region => {
+    const opts = (reg.template_options as Record<string, unknown>) || {};
+    return {
+      ...reg,
+      source: reg.source || (typeof opts.source === 'string' ? opts.source : '') || '',
+    };
+  };
 
   useEffect(() => {
     if (isNew) return;
@@ -56,7 +67,7 @@ export default function VisualPageBuilder() {
 
         try {
           const fetchedRegions = await regionService.getByPageId(pageId);
-          setRegions(fetchedRegions || []);
+          setRegions((fetchedRegions || []).map(normalizeRegion));
         } catch {
           setRegions([]);
         }
@@ -117,6 +128,7 @@ export default function VisualPageBuilder() {
       name: data.name || 'New Region',
       region_type: data.type || 'static_content',
       source: data.type === 'report' ? 'SELECT id, name FROM sample_table' : '',
+      template_options: data.type === 'cards' ? { cards: [] } : undefined,
       position: regions.length + 1,
       page_id: pageData.id,
       is_active: true,
@@ -125,7 +137,7 @@ export default function VisualPageBuilder() {
     setSelectedElement({ kind: 'region', tempId });
   };
 
-  const handleDropItem = (data: any, regionId?: number) => {
+  const handleDropItem = (data: any, regionId?: number, regionTempId?: string) => {
     const tempId = `temp_item_${Date.now()}`;
     const newItem: PageItem = {
       _tempId: tempId,
@@ -136,7 +148,8 @@ export default function VisualPageBuilder() {
       placeholder: data.placeholder || '',
       default_value: '',
       is_required: false,
-      region_id: regionId || null,
+      region_id: regionId ?? null,
+      _tempRegionId: regionTempId,
       page_id: pageData.id,
       is_active: true,
     };
@@ -144,14 +157,34 @@ export default function VisualPageBuilder() {
     setSelectedElement({ kind: 'item', tempId });
   };
 
+  // An item belongs to a region either via persisted ids or, before the first
+  // save, via the client-side temp ids of freshly dropped regions/items.
+  const itemBelongsToRegion = (item: PageItem, region: Region) =>
+    (region.id != null && item.region_id === region.id) ||
+    (region._tempId != null && item._tempRegionId === region._tempId);
+
   const handleDeleteRegion = async (e: React.MouseEvent, region: Region) => {
     e.stopPropagation();
     if (confirm(`Are you sure you want to delete region "${region.name}"?`)) {
       try {
         if (region.id) {
           await regionService.delete(region.id);
+          // Persisted items of a deleted region become page-level items
+          // instead of pointing at a region that no longer exists.
+          const orphaned = items.filter(i => i.region_id === region.id);
+          await Promise.all(
+            orphaned
+              .filter(i => i.id != null)
+              .map(i => itemService.update(i.id as number, { region_id: null }).catch(() => null))
+          );
         }
         setRegions(prev => prev.filter(r => (r.id ? r.id !== region.id : r._tempId !== region._tempId)));
+        setItems(prev => prev.map(i =>
+          (region.id != null && i.region_id === region.id) ||
+          (region._tempId != null && i._tempRegionId === region._tempId)
+            ? { ...i, region_id: null, _tempRegionId: undefined }
+            : i
+        ));
         if (selectedElement?.kind === 'region' && (selectedElement.id === region.id || selectedElement.tempId === region._tempId)) {
           setSelectedElement(null);
         }
@@ -190,16 +223,27 @@ export default function VisualPageBuilder() {
     setSelectedElement({ kind: 'region', id: regions[index]?.id, tempId: regions[index]?._tempId });
   };
 
-  const handleMoveItem = (index: number, dir: -1 | 1) => {
+  // Identity-based reorder within the item's own container (region or
+  // unassigned list). The canvas passes items, not indexes, because
+  // filtered-list indexes do not match positions in the global items array.
+  const moveItem = (item: PageItem, dir: -1 | 1) => {
+    const groupKeyOf = (sib: PageItem) => sib.region_id ?? sib._tempRegionId ?? null;
+    const sameItem = (a: PageItem, b: PageItem) =>
+      a.id != null && b.id != null ? a.id === b.id : a._tempId === b._tempId;
     setItems(prev => {
+      const groupKey = groupKeyOf(item);
+      const siblingIndexes = prev
+        .map((sib, i) => (groupKeyOf(sib) === groupKey ? i : -1))
+        .filter(i => i >= 0);
+      const pos = siblingIndexes.findIndex(i => sameItem(prev[i], item));
+      const target = pos + dir;
+      if (pos < 0 || target < 0 || target >= siblingIndexes.length) return prev;
       const next = [...prev];
-      const target = index + dir;
-      if (target < 0 || target >= next.length) return prev;
-      const [moved] = next.splice(index, 1);
-      next.splice(target, 0, moved);
+      const a = siblingIndexes[pos];
+      const b = siblingIndexes[target];
+      [next[a], next[b]] = [next[b], next[a]];
       return next;
     });
-    setSelectedElement({ kind: 'item', id: items[index]?.id, tempId: items[index]?._tempId });
   };
 
   const handleAddValidation = (itemName: string) => {
@@ -299,10 +343,20 @@ export default function VisualPageBuilder() {
       // Save Regions
       const savedRegions = await Promise.all(
         regions.map(async reg => {
+          // Report SQL lives in template_options.source on the backend
+          // (there is no `source` column); merge the canvas field in so it
+          // actually persists instead of being silently dropped.
+          const templateOptions: Record<string, unknown> = {
+            ...((reg.template_options as Record<string, unknown>) || {}),
+          };
+          if (reg.region_type === 'report' && reg.source && templateOptions.source == null) {
+            templateOptions.source = reg.source;
+          }
           const regPayload = {
             name: reg.name,
             region_type: reg.region_type,
             source: reg.source || '',
+            template_options: templateOptions,
             position: reg.position || 1,
             page_id: savedPage.id,
             is_active: reg.is_active ?? true,
@@ -314,7 +368,22 @@ export default function VisualPageBuilder() {
           }
         })
       );
-      setRegions(savedRegions);
+      setRegions(savedRegions.map(normalizeRegion));
+
+      // Map freshly created regions (client temp ids -> persisted ids) so
+      // items dropped into unsaved regions can be linked on the same save.
+      // Promise.all preserves order, so savedRegions[i] matches regions[i].
+      const regionIdByTempId = new Map<string, number>();
+      regions.forEach((reg, i) => {
+        if (reg._tempId && savedRegions[i]?.id != null) {
+          regionIdByTempId.set(reg._tempId, savedRegions[i].id as number);
+        }
+      });
+      const resolveRegionId = (item: PageItem): number | null => {
+        if (item.region_id != null) return item.region_id;
+        if (item._tempRegionId) return regionIdByTempId.get(item._tempRegionId) ?? null;
+        return null;
+      };
 
       // Save Items
       const savedItems = await Promise.all(
@@ -327,6 +396,7 @@ export default function VisualPageBuilder() {
             placeholder: item.placeholder || '',
             default_value: item.default_value || '',
             is_required: item.is_required ?? false,
+            region_id: resolveRegionId(item),
             page_id: savedPage.id,
             is_active: item.is_active ?? true,
           };
@@ -456,7 +526,7 @@ export default function VisualPageBuilder() {
   return (
     <div className="space-y-4">
       {/* Builder Toolbar */}
-      <div className="flex items-center justify-between bg-white dark:bg-dark-card p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
+      <div className="flex items-center justify-between bg-white dark:bg-darkgray p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
         <div className="flex items-center gap-3">
           <Link
             href={`/apps/builder/${appId}`}
@@ -500,7 +570,7 @@ export default function VisualPageBuilder() {
       <div className="grid grid-cols-12 gap-4 items-start">
         {/* Left Column: Page Settings & Component Palette */}
         <div className="col-span-12 lg:col-span-3 space-y-4">
-          <div className="bg-white dark:bg-dark-card p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
+          <div className="bg-white dark:bg-darkgray p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
             <h3 className="font-bold text-sm mb-3 flex items-center gap-2">
               <Icon icon="solar:document-bold" className="text-blue-600" />
               Page Metadata
@@ -555,7 +625,7 @@ export default function VisualPageBuilder() {
             </div>
           </div>
 
-          <div className="bg-white dark:bg-dark-card p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
+          <div className="bg-white dark:bg-darkgray p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
             <h3 className="font-bold text-sm mb-1 flex items-center gap-2">
               <Icon icon="solar:widget-add-bold" className="text-blue-600" />
               Component Palette
@@ -587,6 +657,14 @@ export default function VisualPageBuilder() {
               >
                 <Icon icon="solar:table-bold" className="text-base" />
                 SQL Report Region
+              </div>
+              <div
+                draggable
+                onDragStart={() => handleDragStart('region', { type: 'cards', name: 'KPI Cards Region' })}
+                className="p-2.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs font-medium cursor-grab flex items-center gap-2 hover:bg-emerald-100 transition"
+              >
+                <Icon icon="solar:card-line-duotone" className="text-base" />
+                KPI Cards Region
               </div>
 
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider pt-2">Page Items</p>
@@ -657,7 +735,7 @@ export default function VisualPageBuilder() {
             </div>
           </div>
 
-          <div className="bg-white dark:bg-dark-card rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
+          <div className="bg-white dark:bg-darkgray rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
             <button
               onClick={() => setShowProcesses(!showProcesses)}
               className="w-full p-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800 transition"
@@ -730,7 +808,7 @@ export default function VisualPageBuilder() {
             )}
           </div>
 
-          <div className="bg-white dark:bg-dark-card rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
+          <div className="bg-white dark:bg-darkgray rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
             <button
               onClick={() => setShowComputations(!showComputations)}
               className="w-full p-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800 transition"
@@ -815,7 +893,7 @@ export default function VisualPageBuilder() {
                 setDragPayload(null);
               }
             }}
-            className="bg-white dark:bg-dark-card p-6 rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-800 min-h-[600px] space-y-4"
+            className="bg-white dark:bg-darkgray p-6 rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-800 min-h-[600px] space-y-4"
           >
             <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-800">
               <h2 className="font-bold text-sm text-gray-700 dark:text-gray-300">Layout Canvas</h2>
@@ -835,11 +913,7 @@ export default function VisualPageBuilder() {
               const isSelected = selectedElement?.kind === 'region' &&
                 (selectedElement.id ? selectedElement.id === region.id : selectedElement.tempId === region._tempId);
 
-              const regionItems = items.filter(item =>
-                item.region_id != null
-                  ? (region.id ? item.region_id === region.id : item.region_id === region.id)
-                  : false
-              );
+              const regionItems = items.filter(item => itemBelongsToRegion(item, region));
 
               return (
                 <div
@@ -853,7 +927,7 @@ export default function VisualPageBuilder() {
                     e.preventDefault();
                     e.stopPropagation();
                     if (dragPayload && dragPayload.kind === 'item') {
-                      handleDropItem(dragPayload.data, region.id);
+                      handleDropItem(dragPayload.data, region.id, region._tempId);
                       setDragPayload(null);
                     }
                   }}
@@ -899,7 +973,13 @@ export default function VisualPageBuilder() {
                     </div>
                   </div>
                   <p className="text-xs text-gray-500 font-mono">
-                    {region.region_type === 'report' ? `Query: ${region.source || 'SELECT ...'}` : 'Region Container'}
+                    {region.region_type === 'report'
+                      ? `Query: ${region.source || 'SELECT ...'}`
+                      : region.region_type === 'cards'
+                        ? `${((region.template_options as Record<string, unknown>) || {}).cards instanceof Array
+                            ? ((region.template_options as Record<string, unknown>).cards as unknown[]).length
+                            : 0} static + ${regionItems.length} live KPI cards`
+                        : 'Region Container'}
                   </p>
 
                   {/* Items nested inside this region */}
@@ -913,8 +993,8 @@ export default function VisualPageBuilder() {
                             (selectedElement.id ? selectedElement.id === item.id : selectedElement.tempId === item._tempId)}
                           onSelect={() => setSelectedElement({ kind: 'item', id: item.id, tempId: item._tempId })}
                           onDelete={(e) => handleDeleteItem(e, item)}
-                          onMoveUp={(e) => { e.stopPropagation(); handleMoveItem(itemIndex, -1); }}
-                          onMoveDown={(e) => { e.stopPropagation(); handleMoveItem(itemIndex + 1, 1); }}
+                          onMoveUp={(e) => { e.stopPropagation(); moveItem(item, -1); }}
+                          onMoveDown={(e) => { e.stopPropagation(); moveItem(item, 1); }}
                         />
                       ))}
                     </div>
@@ -927,8 +1007,10 @@ export default function VisualPageBuilder() {
               );
             })}
 
-            {/* Unassigned Items List */}
-            {items.filter(item => item.region_id == null).map((item, itemIndex) => {
+            {/* Unassigned Items List (page-level items and items whose
+                unsaved region has no match — temp-region items render nested
+                in their region above) */}
+            {items.filter(item => item.region_id == null && item._tempRegionId == null).map((item) => {
               const isSelected = selectedElement?.kind === 'item' &&
                 (selectedElement.id ? selectedElement.id === item.id : selectedElement.tempId === item._tempId);
 
@@ -939,8 +1021,8 @@ export default function VisualPageBuilder() {
                   selected={isSelected}
                   onSelect={() => setSelectedElement({ kind: 'item', id: item.id, tempId: item._tempId })}
                   onDelete={(e) => handleDeleteItem(e, item)}
-                  onMoveUp={(e) => { e.stopPropagation(); handleMoveItem(itemIndex, -1); }}
-                  onMoveDown={(e) => { e.stopPropagation(); handleMoveItem(itemIndex + 1, 1); }}
+                  onMoveUp={(e) => { e.stopPropagation(); moveItem(item, -1); }}
+                  onMoveDown={(e) => { e.stopPropagation(); moveItem(item, 1); }}
                 />
               );
             })}
@@ -950,7 +1032,7 @@ export default function VisualPageBuilder() {
 
         {/* Right Column: Property Inspector */}
         <div className="col-span-12 lg:col-span-3">
-          <div className="bg-white dark:bg-dark-card p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm sticky top-4">
+          <div className="bg-white dark:bg-darkgray p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm sticky top-4">
             <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-100 dark:border-gray-800">
               <h3 className="font-bold text-sm flex items-center gap-2">
                 <Icon icon="solar:tuning-bold" className="text-blue-600" />
@@ -992,6 +1074,7 @@ export default function VisualPageBuilder() {
                     <option value="static_content">Static Content</option>
                     <option value="form">Form Region</option>
                     <option value="report">SQL Report Region</option>
+                    <option value="cards">KPI Cards Region</option>
                   </select>
                 </div>
 
@@ -1005,6 +1088,45 @@ export default function VisualPageBuilder() {
                       placeholder="SELECT * FROM my_table"
                       className="w-full px-3 py-1.5 border rounded-lg text-xs font-mono"
                     />
+                  </div>
+                )}
+
+                {selectedRegion.region_type === 'cards' && (
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                      KPI Cards (JSON list)
+                    </label>
+                    <textarea
+                      rows={8}
+                      value={JSON.stringify(
+                        ((selectedRegion.template_options as Record<string, unknown>) || {}).cards ?? [],
+                        null,
+                        2
+                      )}
+                      onChange={(e) => {
+                        try {
+                          const parsed = JSON.parse(e.target.value || '[]');
+                          if (!Array.isArray(parsed)) throw new Error('Top level must be a list');
+                          const opts = {
+                            ...((selectedRegion.template_options as Record<string, unknown>) || {}),
+                            cards: parsed,
+                          };
+                          updateSelectedProperty('template_options', opts);
+                          setCardsJsonError(null);
+                        } catch (err: any) {
+                          setCardsJsonError(err.message || 'Invalid JSON');
+                        }
+                      }}
+                      placeholder={'[\n  {"title": "Revenue", "value": "12,450", "subtitle": "This month", "icon": "💰", "change": "12%", "change_direction": "up", "accent": "green"}\n]'}
+                      className="w-full px-3 py-1.5 border rounded-lg text-xs font-mono"
+                    />
+                    <p className="text-[11px] text-gray-400 mt-1">
+                      Static KPI cards. Page items dropped into this region appear as live cards too.
+                      Accents: blue, green, purple, amber, red. Icon: any emoji or glyph.
+                    </p>
+                    {cardsJsonError && (
+                      <p className="text-[11px] text-red-600 mt-1">{cardsJsonError}</p>
+                    )}
                   </div>
                 )}
               </div>
@@ -1045,6 +1167,41 @@ export default function VisualPageBuilder() {
                     <option value="date_picker">Date Picker</option>
                     <option value="display_only">Display Only</option>
                     <option value="hidden">Hidden Item</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Parent Region</label>
+                  <select
+                    value={
+                      selectedItem.region_id != null
+                        ? String(selectedItem.region_id)
+                        : selectedItem._tempRegionId
+                          ? `temp:${selectedItem._tempRegionId}`
+                          : ''
+                    }
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setItems(prev => prev.map(i => {
+                        const matches = selectedElement?.kind === 'item' &&
+                          (selectedElement.id != null ? i.id === selectedElement.id : i._tempId === selectedElement.tempId);
+                        if (!matches) return i;
+                        if (v === '') return { ...i, region_id: null, _tempRegionId: undefined };
+                        if (v.startsWith('temp:')) return { ...i, region_id: null, _tempRegionId: v.slice(5) };
+                        return { ...i, region_id: parseInt(v, 10), _tempRegionId: undefined };
+                      }));
+                    }}
+                    className="w-full px-3 py-1.5 border rounded-lg text-xs"
+                  >
+                    <option value="">Unassigned (page level)</option>
+                    {regions.map(reg => (
+                      <option
+                        key={reg.id ?? reg._tempId}
+                        value={reg.id != null ? String(reg.id) : `temp:${reg._tempId}`}
+                      >
+                        {reg.name || 'Untitled Region'} ({reg.region_type})
+                      </option>
+                    ))}
                   </select>
                 </div>
 

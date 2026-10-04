@@ -41,7 +41,11 @@ export const pageService = {
     apiClient
       .get<PageBuilderContext>(`/pages/builder/${appId}`)
       .then((context) => context.pages),
-  getById: (id: number | string) => apiClient.get<Page>(`/pages/builder/${id}`),
+  // Single-page fetch for the visual builder. This must NOT hit
+  // /pages/builder/{id}: that route returns the whole builder context for an
+  // *application* id, so a page id would be mistaken for an application id
+  // (404s and wrong-shaped responses).
+  getById: (id: number | string) => apiClient.get<Page>(`/pages/builder/page/${id}`),
   create: (data: PageCreate) => apiClient.post<Page>('/pages/builder/', data),
   update: (id: number | string, data: PageUpdate) =>
     apiClient.put<Page>(`/pages/builder/${id}`, data),

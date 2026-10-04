@@ -37,16 +37,31 @@ def form_region(region: models.Region, db: Session, session_id: str, page_id: in
     if session_service is None:
         session_service = SessionService(db)
 
-    # Get all items for this region/position
-    # In a real APEX, items belong to pages, not regions directly
-    # But for simplicity, we'll get all items for the page and let the template
-    # determine layout, or we could add a region_id to page items
-    # For this MVP, we'll get all page items and render them in the form
+    # Items assigned to this region render here. Unassigned items (region_id
+    # NULL, e.g. created before regions could own items) keep rendering in
+    # every form region, preserving their historic behavior. Items assigned to
+    # non-form regions also render here, since those region types do not
+    # render items themselves; items assigned to a *different* form region
+    # are excluded.
+    page_regions = db.query(models.Region).filter(
+        models.Region.page_id == page_id,
+        models.Region.is_active == True
+    ).all()
+    form_region_ids = {
+        r.id for r in page_regions if (r.region_type or "").lower() == "form"
+    }
 
     page_items = db.query(models.PageItem).filter(
         models.PageItem.page_id == page_id,
         models.PageItem.is_active == True
-    ).order_by(models.PageItem.id).all()  # Order by ID or we could add a display_sequence
+    ).order_by(models.PageItem.id).all()
+
+    region_items = [
+        item for item in page_items
+        if item.region_id is None
+        or item.region_id == region.id
+        or item.region_id not in form_region_ids
+    ]
 
     # Group items by type for rendering
     html_parts = [
@@ -62,7 +77,7 @@ def form_region(region: models.Region, db: Session, session_id: str, page_id: in
     ]
 
     # Render each item
-    for item in page_items:
+    for item in region_items:
         item_html = _render_form_item(item, db, session_id, page_id, session_service)
         if item_html:
             html_parts.append(f"      <div class='form-item-group' data-item-id='{item.id}'>")

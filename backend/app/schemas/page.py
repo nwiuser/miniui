@@ -17,8 +17,10 @@ class PageCreate(PageBase):
     pass
 
 
-class PageUpdate(PageBase):
-    id: int
+class PageUpdate(BaseModel):
+    # All fields optional: PUT takes the id from the path and crud applies
+    # only the supplied fields (exclude_unset=True).
+    application_id: Optional[int] = None
     name: Optional[str] = None
     alias: Optional[str] = None
     page_number: Optional[int] = None

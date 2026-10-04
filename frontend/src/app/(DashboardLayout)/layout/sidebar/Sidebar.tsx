@@ -103,7 +103,7 @@ const SidebarLayout = ({ onClose }: { onClose?: () => void }) => {
       width={'270px'}
       showTrigger={false}
       mode={sidebarMode}
-      className='fixed left-0 top-0 xl:top-[70px] border-none shadow-boxShadow bg-background z-10 h-screen'>
+      className='fixed left-0 top-0 border-none shadow-boxShadow bg-background z-10 h-screen'>
       {/* Logo */}
       <div className='px-4 flex items-center brand-logo overflow-hidden'>
         <AMLogo component={Link} href='/' img=''>

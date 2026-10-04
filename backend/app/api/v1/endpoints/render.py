@@ -131,4 +131,10 @@ async def render_page(
 
     html_content = '\n'.join(html_parts)
 
-    return HTMLResponse(content=html_content, status_code=200)
+    # Never cache rendered pages: standalone views must show the latest
+    # saved state without a manual refresh.
+    return HTMLResponse(
+        content=html_content,
+        status_code=200,
+        headers={"Cache-Control": "no-store, max-age=0"},
+    )

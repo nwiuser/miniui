@@ -78,7 +78,6 @@ def create_region(region: schemas.RegionCreate, db: Session = Depends(get_db), c
     # Check if the region specifies a page_id
     if region.page_id:
         # Get the page to verify it exists and get its application_id
-        from .... import crud
         page = crud.get_page(db, page_id=region.page_id)
         if not page:
             raise HTTPException(status_code=404, detail="Page not found")

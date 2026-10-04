@@ -5,6 +5,7 @@ Handles the core logic for showing and accepting pages in the APEX-like applicat
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 import json
+import os
 
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -17,7 +18,8 @@ from ..region_types import (
     render_static_content_region,
     render_report_region,
     form_region,
-    render_rest_region
+    render_rest_region,
+    render_cards_region
 )
 from ..item_types import (
     render_text_item,
@@ -29,6 +31,21 @@ from ..item_types import (
     render_display_only_item,
     render_hidden_item
 )
+
+
+def _static_asset_version(filename: str) -> str:
+    """Cache-busting query string for a file under ``./static``.
+
+    The page HTML itself is served ``no-store``, but browsers cache
+    ``/static/*`` assets (stylesheet, script) aggressively — without a version
+    in the URL, a CSS/JS change never reaches open tabs. The file mtime changes
+    on every edit or deploy; if the file cannot be stat'ed, fall back to "1".
+    """
+    try:
+        mtime = os.path.getmtime(os.path.join(os.getcwd(), "static", filename))
+        return str(int(mtime))
+    except OSError:
+        return "1"
 
 
 class RenderingService:
@@ -315,11 +332,13 @@ class RenderingService:
         region_type = region.region_type.lower()
 
         if region_type == "static_content":
-            return render_static_content_region(region, self.db)
+            return render_static_content_region(region, self.db, session_id, page_id, self.session_service)
         elif region_type == "report":
             return render_report_region(region, self.db, session_id, page_id, self.session_service, self)
         elif region_type == "form":
             return form_region(region, self.db, session_id, page_id, self.session_service)
+        elif region_type == "cards":
+            return render_cards_region(region, self.db, session_id, page_id, self.session_service)
         elif region_type == "rest":
             return render_rest_region(region, self.db, session_id, page_id, self.session_service)
         else:
@@ -865,6 +884,9 @@ class RenderingService:
         # Get the page's CSS classes or theme information
         # For now, we'll use a simple template
 
+        css_version = _static_asset_version("css/apexos.css")
+        js_version = _static_asset_version("js/apexos.js")
+
         html_parts = [
             "<!DOCTYPE html>",
             "<html lang='en'>",
@@ -872,7 +894,7 @@ class RenderingService:
             f"    <title>{application.name} - {page.name}</title>",
             "    <meta charset='utf-8'>",
             "    <meta name='viewport' content='width=device-width, initial-scale=1'>",
-            "    <link rel='stylesheet' href='/static/css/apexos.css'>",
+            f"    <link rel='stylesheet' href='/static/css/apexos.css?v={css_version}'>",
             "</head>",
             "<body>",
             f"    <div class='page' data-application-id='{application.id}' data-page-id='{page.id}'>",
@@ -902,7 +924,7 @@ class RenderingService:
             f"            <p>Session: {session_id[:8]}...</p>",
             "        </footer>",
             "    </div>",
-            "    <script src='/static/js/apexos.js'></script>",
+            f"    <script src='/static/js/apexos.js?v={js_version}'></script>",
             "</body>",
             "</html>"
         ])

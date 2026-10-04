@@ -1,7 +1,7 @@
 import pytest
 from sqlalchemy import text
 
-from app.core.region_types import form_region, render_report_region, render_static_content_region
+from app.core.region_types import form_region, render_report_region, render_static_content_region, render_cards_region
 from app.core.session.service import SessionService
 from app.db import models
 
@@ -57,6 +57,51 @@ class TestStaticContentRegion:
 
         html = render_static_content_region(region, db_session)
         assert "<p>from json</p>" in html
+
+    def test_renders_items_assigned_to_the_region(self, db_session, test_page, session_id):
+        region = models.Region(
+            page_id=test_page.id, name="WithItems", region_type="static_content", is_active=True
+        )
+        other = models.Region(
+            page_id=test_page.id, name="Other", region_type="static_content", is_active=True
+        )
+        db_session.add_all([region, other])
+        db_session.commit()
+        db_session.refresh(region)
+        db_session.refresh(other)
+        db_session.add_all([
+            models.PageItem(
+                page_id=test_page.id, region_id=region.id, name="P1_MINE",
+                item_type="text", label="Mine", is_active=True,
+            ),
+            models.PageItem(
+                page_id=test_page.id, region_id=other.id, name="P1_THEIRS",
+                item_type="text", label="Theirs", is_active=True,
+            ),
+            models.PageItem(
+                page_id=test_page.id, region_id=None, name="P1_LOOSE",
+                item_type="text", label="Loose", is_active=True,
+            ),
+        ])
+        db_session.commit()
+
+        html = render_static_content_region(region, db_session, session_id, test_page.id)
+
+        assert "P1_MINE" in html
+        assert "P1_THEIRS" not in html
+        assert "P1_LOOSE" not in html
+
+    def test_renders_nothing_extra_without_session_context(self, db_session, test_page):
+        region = models.Region(
+            page_id=test_page.id, name="Plain", region_type="static_content", is_active=True
+        )
+        db_session.add(region)
+        db_session.commit()
+        db_session.refresh(region)
+
+        html = render_static_content_region(region, db_session)
+        assert "static-content-region" in html
+        assert "static-region-items" not in html
 
     def test_non_json_options_treated_as_raw_content(self, db_session, test_page):
         region = models.Region(
@@ -381,3 +426,119 @@ class TestReportRegion:
             html = render_report_region(region, db_session, session_id, test_page.id)
             assert "No SQL query defined" not in html
             assert "report-table" in html
+
+
+class TestCardsRegion:
+    def _cards_region(self, db_session, test_page, **kwargs):
+        region = models.Region(
+            page_id=test_page.id,
+            name="KPIs",
+            region_type="cards",
+            is_active=True,
+            **kwargs,
+        )
+        db_session.add(region)
+        db_session.commit()
+        db_session.refresh(region)
+        return region
+
+    def test_renders_configured_static_cards(self, db_session, test_page, session_id):
+        region = self._cards_region(
+            db_session,
+            test_page,
+            template_options={
+                "cards": [
+                    {"title": "Revenue", "value": "12,450", "subtitle": "This month",
+                     "change": "12%", "change_direction": "up", "accent": "green"},
+                    {"title": "Active Users", "value": "842"},
+                ]
+            },
+        )
+
+        html = render_cards_region(region, db_session, session_id, test_page.id)
+
+        assert "kpi-cards" in html
+        assert "Revenue" in html
+        assert "12,450" in html
+        assert "kpi-up" in html
+        assert "Active Users" in html
+        assert f"data-region-id='{region.id}'" in html
+
+    def test_assigned_items_become_live_cards(self, db_session, test_page, session_id):
+        region = self._cards_region(db_session, test_page)
+        other = self._cards_region(db_session, test_page)
+        db_session.add_all([
+            models.PageItem(
+                page_id=test_page.id, region_id=region.id, name="P1_ORDERS",
+                item_type="text", label="Orders", default_value="37", is_active=True,
+            ),
+            models.PageItem(
+                page_id=test_page.id, region_id=other.id, name="P1_ELSEWHERE",
+                item_type="text", label="Elsewhere", default_value="9", is_active=True,
+            ),
+            models.PageItem(
+                page_id=test_page.id, region_id=region.id, name="P1_SECRET",
+                item_type="hidden", default_value="x", is_active=True,
+            ),
+        ])
+        db_session.commit()
+
+        html = render_cards_region(region, db_session, session_id, test_page.id)
+
+        assert "Orders" in html
+        assert "37" in html
+        assert "Elsewhere" not in html
+        assert "P1_SECRET" not in html
+
+    def test_session_value_beats_default(self, db_session, test_page, session_id):
+        region = self._cards_region(db_session, test_page)
+        db_session.add(
+            models.PageItem(
+                page_id=test_page.id, region_id=region.id, name="P1_TOTAL",
+                item_type="text", label="Total", default_value="0", is_active=True,
+            )
+        )
+        db_session.commit()
+        SessionService(db_session).set_item(session_id, test_page.id, "P1_TOTAL", "512")
+
+        html = render_cards_region(region, db_session, session_id, test_page.id)
+
+        assert "512" in html
+
+    def test_empty_region_shows_placeholder(self, db_session, test_page, session_id):
+        region = self._cards_region(db_session, test_page)
+
+        html = render_cards_region(region, db_session, session_id, test_page.id)
+
+        assert "No KPI cards defined" in html
+
+    def test_icon_medallion_and_accent_fallback(self, db_session, test_page, session_id):
+        region = self._cards_region(
+            db_session,
+            test_page,
+            template_options={
+                "cards": [
+                    {"title": "Cash", "value": "$9", "icon": "💰", "accent": "amber"},
+                    {"title": "Mystery", "value": "?", "accent": "chartreuse"},
+                ]
+            },
+        )
+
+        html = render_cards_region(region, db_session, session_id, test_page.id)
+
+        assert "kpi-icon-amber" in html
+        assert "💰" in html
+        # Unknown accents fall back to blue.
+        assert "kpi-accent-blue" in html
+
+    def test_user_content_is_escaped(self, db_session, test_page, session_id):
+        region = self._cards_region(
+            db_session,
+            test_page,
+            template_options={"cards": [{"title": "<b>Bold</b>", "value": "<script>x</script>"}]},
+        )
+
+        html = render_cards_region(region, db_session, session_id, test_page.id)
+
+        assert "<script>" not in html
+        assert "&lt;script&gt;" in html

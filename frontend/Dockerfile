@@ -9,6 +9,12 @@ RUN npm install --no-audit --no-fund
 
 FROM node:20-alpine AS builder
 WORKDIR /app
+# next.config.mjs resolves rewrites() at BUILD time, so BACKEND_URL must be
+# available here (not just at runtime), otherwise the image bakes in the
+# 'http://localhost:8000' fallback and the containerized frontend cannot
+# reach the backend (ECONNREFUSED 127.0.0.1:8000 -> login 500).
+ARG BACKEND_URL=http://backend:8000
+ENV BACKEND_URL=$BACKEND_URL
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build

@@ -11,7 +11,9 @@ class ApplicationBase(BaseModel):
 class ApplicationCreate(ApplicationBase):
     pass
 
-class ApplicationUpdate(ApplicationBase):
+class ApplicationUpdate(BaseModel):
+    # All fields optional: PUT takes the id from the path and crud applies
+    # only the supplied fields (exclude_unset=True).
     name: Optional[str] = None
     alias: Optional[str] = None
     description: Optional[str] = None

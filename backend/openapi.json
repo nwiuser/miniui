@@ -649,6 +649,17 @@
             ],
             "title": "Placeholder"
           },
+          "region_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Id"
+          },
           "updated_at": {
             "format": "date-time",
             "title": "Updated At",
@@ -747,6 +758,17 @@
               }
             ],
             "title": "Placeholder"
+          },
+          "region_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Id"
           }
         },
         "required": [
@@ -781,10 +803,6 @@
             ],
             "title": "Default Value"
           },
-          "id": {
-            "title": "Id",
-            "type": "integer"
-          },
           "is_active": {
             "anyOf": [
               {
@@ -808,8 +826,15 @@
             "title": "Is Required"
           },
           "item_type": {
-            "title": "Item Type",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Type"
           },
           "label": {
             "anyOf": [
@@ -834,8 +859,15 @@
             "title": "Name"
           },
           "page_id": {
-            "title": "Page Id",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Id"
           },
           "placeholder": {
             "anyOf": [
@@ -847,13 +879,19 @@
               }
             ],
             "title": "Placeholder"
+          },
+          "region_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Id"
           }
         },
-        "required": [
-          "page_id",
-          "item_type",
-          "id"
-        ],
         "title": "ItemUpdate",
         "type": "object"
       },
@@ -1769,8 +1807,15 @@
             "title": "Alias"
           },
           "application_id": {
-            "title": "Application Id",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Application Id"
           },
           "description": {
             "anyOf": [
@@ -1782,10 +1827,6 @@
               }
             ],
             "title": "Description"
-          },
-          "id": {
-            "title": "Id",
-            "type": "integer"
           },
           "is_active": {
             "anyOf": [
@@ -1832,10 +1873,6 @@
             "title": "Page Number"
           }
         },
-        "required": [
-          "application_id",
-          "id"
-        ],
         "title": "PageUpdate",
         "type": "object"
       },
@@ -1970,21 +2007,6 @@
       },
       "RegionUpdate": {
         "properties": {
-          "alias": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Alias"
-          },
-          "id": {
-            "title": "Id",
-            "type": "integer"
-          },
           "is_active": {
             "anyOf": [
               {
@@ -2008,8 +2030,15 @@
             "title": "Name"
           },
           "page_id": {
-            "title": "Page Id",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Id"
           },
           "position": {
             "anyOf": [
@@ -2043,10 +2072,6 @@
             "title": "Template Options"
           }
         },
-        "required": [
-          "page_id",
-          "id"
-        ],
         "title": "RegionUpdate",
         "type": "object"
       },
@@ -4797,6 +4822,58 @@
           }
         ],
         "summary": "Create Page Builder",
+        "tags": [
+          "pages",
+          "pages"
+        ]
+      }
+    },
+    "/api/v1/pages/builder/page/{page_id}": {
+      "get": {
+        "description": "Get a single page for the visual builder (requires ADMIN or DEVELOPER).\n\nThis is separate from ``GET /builder/{application_id}`` (which returns the\nwhole builder context for an application) so a page id is never mistaken\nfor an application id.",
+        "operationId": "get_page_builder_api_v1_pages_builder_page__page_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "page_id",
+            "required": true,
+            "schema": {
+              "title": "Page Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "summary": "Get Page Builder",
         "tags": [
           "pages",
           "pages"

@@ -77,7 +77,7 @@ export default function ApplicationsPage() {
         </Link>
       </div>
 
-      <div className="bg-white dark:bg-dark-card rounded-2xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm">
+      <div className="bg-white dark:bg-darkgray rounded-2xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
           <div>
             <h2 className="font-bold">All Applications ({apps.length})</h2>
@@ -90,7 +90,7 @@ export default function ApplicationsPage() {
               placeholder="Search applications..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full pl-10 pr-4 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-dark dark:text-gray-200 placeholder:text-gray-400"
             />
           </div>
         </div>
@@ -128,7 +128,7 @@ export default function ApplicationsPage() {
               <div
                 key={app.id}
                 onClick={() => router.push(`/apps/builder/${app.id}`)}
-                className="group bg-gray-50 dark:bg-gray-800/40 hover:bg-white dark:hover:bg-gray-800/80 border border-gray-200/80 dark:border-gray-700/80 hover:border-blue-500 dark:hover:border-blue-500 rounded-2xl p-5 transition duration-200 cursor-pointer shadow-sm hover:shadow-md flex flex-col justify-between"
+                className="group bg-gray-50 dark:bg-dark hover:bg-white dark:hover:bg-gray-800 border border-gray-200/80 dark:border-gray-700/80 hover:border-blue-500 dark:hover:border-blue-500 rounded-2xl p-5 transition duration-200 cursor-pointer shadow-sm hover:shadow-md flex flex-col justify-between"
               >
                 <div>
                   <div className="flex items-start justify-between gap-2 mb-3">

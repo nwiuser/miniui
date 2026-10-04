@@ -21,7 +21,9 @@ class LovBase(BaseModel):
 class LovCreate(LovBase):
     pass
 
-class LovUpdate(LovBase):
+class LovUpdate(BaseModel):
+    # All fields optional: PUT takes the id from the path and crud applies
+    # only the supplied fields (exclude_unset=True).
     lov_name: Optional[str] = None
     lov_definition: Optional[str] = None
     is_static: Optional[bool] = None

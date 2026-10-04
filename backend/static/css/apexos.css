@@ -191,6 +191,119 @@ body {
     font-size: 0.9em;
 }
 
+/* KPI cards region (APEX Cards style) */
+.kpi-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 16px;
+}
+
+.kpi-card {
+    position: relative;
+    background-color: #fff;
+    border: 1px solid #e0e6eb;
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(44, 62, 80, 0.08);
+    overflow: hidden;
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.kpi-card:hover {
+    box-shadow: 0 6px 16px rgba(44, 62, 80, 0.14);
+    transform: translateY(-2px);
+}
+
+/* Accent bar across the top of the card */
+.kpi-card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background-color: #3498db;
+}
+
+.kpi-card.kpi-accent-blue::before { background-color: #3498db; }
+.kpi-card.kpi-accent-green::before { background-color: #00ceb6; }
+.kpi-card.kpi-accent-purple::before { background-color: #8d70f8; }
+.kpi-card.kpi-accent-amber::before { background-color: #FFB900; }
+.kpi-card.kpi-accent-red::before { background-color: #FF6692; }
+
+/* Icon medallion */
+.kpi-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    line-height: 1;
+    margin-bottom: 12px;
+    background-color: #e3f2fd;
+    color: #1565c0;
+}
+
+.kpi-icon-blue { background-color: #e3f2fd; color: #1565c0; }
+.kpi-icon-green { background-color: #d9f7f3; color: #00796b; }
+.kpi-icon-purple { background-color: #ede9fe; color: #6d28d9; }
+.kpi-icon-amber { background-color: #fef3c7; color: #b45309; }
+.kpi-icon-red { background-color: #fee2e2; color: #b91c1c; }
+
+.kpi-title {
+    font-size: 0.78em;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #7f8c8d;
+    margin-bottom: 6px;
+}
+
+.kpi-value {
+    font-size: 2.1em;
+    font-weight: bold;
+    color: #2c3e50;
+    line-height: 1.15;
+}
+
+.kpi-subtitle {
+    font-size: 0.9em;
+    color: #7f8c8d;
+    margin-top: 4px;
+}
+
+/* Change badge (pill) */
+.kpi-badge {
+    display: inline-block;
+    font-size: 0.8em;
+    font-weight: bold;
+    margin-top: 10px;
+    padding: 3px 12px;
+    border-radius: 999px;
+    background-color: #eef1f4;
+    color: #5d6d7e;
+}
+
+.kpi-badge.kpi-up {
+    background-color: #d9f7f3;
+    color: #00796b;
+}
+
+.kpi-badge.kpi-down {
+    background-color: #fee2e2;
+    color: #b91c1c;
+}
+
+.cards-empty {
+    text-align: center;
+    color: #7f8c8d;
+    padding: 20px;
+    border: 2px dashed #ddd;
+    border-radius: 4px;
+}
+
 /* Responsive design */
 @media (max-width: 768px) {
     .page {

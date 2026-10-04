@@ -155,6 +155,13 @@ class TestBuildAndRender:
         assert "Contact" in response.text
         assert "Page Items" in response.text
         assert page_id is not None
+        # Standalone views must never be cached: they have to show the latest
+        # saved page without a manual refresh.
+        assert response.headers["cache-control"] == "no-store, max-age=0"
+
+        live = client.get(f"/api/v1/pages/{application.alias}/1")
+        assert live.status_code == 200
+        assert live.headers["cache-control"] == "no-store, max-age=0"
 
 
 class TestSubmit:

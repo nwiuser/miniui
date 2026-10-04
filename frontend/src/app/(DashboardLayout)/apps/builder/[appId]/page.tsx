@@ -13,7 +13,10 @@ export default function ApplicationBuilderPage() {
   const params = useParams();
   const router = useRouter();
   const appId = params.appId as string;
-  const isNew = appId === 'new';
+  // '/apps/new' reuses this component without an appId route param, so a
+  // missing appId must behave as create-mode instead of fetching id
+  // 'undefined' from the API.
+  const isNew = !appId || appId === 'new';
 
   const [appData, setAppData] = useState<Partial<Application>>({
     name: '',
@@ -284,7 +287,7 @@ export default function ApplicationBuilderPage() {
   return (
     <div className="space-y-6">
       {/* Top Header */}
-      <div className="flex items-center justify-between bg-white dark:bg-dark-card p-6 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
+      <div className="flex items-center justify-between bg-white dark:bg-darkgray p-6 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
         <div>
           <div className="flex items-center gap-2 text-sm text-gray-500 mb-1">
             <Link href="/" className="hover:underline">Dashboard</Link>
@@ -321,7 +324,7 @@ export default function ApplicationBuilderPage() {
       )}
 
       {/* Application Properties Form */}
-      <div className="bg-white dark:bg-dark-card p-6 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
+      <div className="bg-white dark:bg-darkgray p-6 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
         <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
           <Icon icon="solar:settings-bold" className="text-blue-600" />
           Application Settings
@@ -411,7 +414,7 @@ export default function ApplicationBuilderPage() {
 
       {/* Pages List Section */}
       {!isNew && (
-        <div className="bg-white dark:bg-dark-card p-6 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
+        <div className="bg-white dark:bg-darkgray p-6 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
           <div className="flex justify-between items-center mb-6">
             <div>
               <h2 className="text-lg font-bold flex items-center gap-2">
@@ -489,7 +492,7 @@ export default function ApplicationBuilderPage() {
 
       {/* LOV Management Section */}
       {!isNew && (
-        <div className="bg-white dark:bg-dark-card p-6 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
+        <div className="bg-white dark:bg-darkgray p-6 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
           <button
             onClick={() => setShowLovs(!showLovs)}
             className="w-full flex justify-between items-center"
@@ -582,7 +585,7 @@ export default function ApplicationBuilderPage() {
       )}
     {/* REST Data Sources Section */}
       {!isNew && (
-        <div className="bg-white dark:bg-dark-card p-6 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
+        <div className="bg-white dark:bg-darkgray p-6 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
           <button
             onClick={() => setShowRestSources(!showRestSources)}
             className="w-full flex justify-between items-center"

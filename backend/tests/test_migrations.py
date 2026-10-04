@@ -3,7 +3,7 @@ import os
 
 import pytest
 from alembic.autogenerate import compare_metadata
-from alembic.command import downgrade, upgrade
+from alembic.command import downgrade, stamp, upgrade
 from alembic.config import Config
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
@@ -64,7 +64,7 @@ def engine(db_url):
 class TestMigrationChain:
     def test_single_head(self):
         heads = ScriptDirectory.from_config(_config(":memory:")).get_heads()
-        assert heads == ["b3c4d5e6f7a8"]
+        assert heads == ["f3a5c7e9b1d2"]
 
     def test_migrations_are_linear(self):
         script = ScriptDirectory.from_config(_config(":memory:"))
@@ -78,6 +78,8 @@ class TestMigrationChain:
             revision = script.get_revision(revision).down_revision
 
         assert walked == [
+            "f3a5c7e9b1d2",
+            "c9d0e1f2a3b4",
             "b3c4d5e6f7a8",
             "a2b3c4d5e6f7",
             "f1a2b3c4d5e6",
@@ -173,6 +175,24 @@ class TestUpgrade:
         assert "apex_rest_data_sources" in inspector.get_table_names()
         columns = {c["name"] for c in inspector.get_columns("apex_rest_data_sources")}
         assert {"application_id", "url", "method", "response_mapping", "timeout"} <= columns
+
+    def test_repair_backfills_revisions_skipped_by_an_old_stamp(
+        self, db_url, engine
+    ):
+        """Regression test: a database stamped at b3c4d5e6f7a8 without the
+        d1e2/e2f3 revisions ever running gets their schema from the repair
+        revision on the next upgrade."""
+        cfg = _config(db_url)
+        upgrade(cfg, "9c8d7f012c3a")
+        stamp(cfg, "b3c4d5e6f7a8")
+
+        upgrade(cfg, "head")
+
+        inspector = inspect(engine)
+        assert "is_public" in {
+            c["name"] for c in inspector.get_columns("apex_pages")
+        }
+        assert "apex_rest_data_sources" in inspector.get_table_names()
 
     def test_execution_point_fits_its_default(self, db_url, engine):
         """The column must be wide enough for the value it defaults to, or every
@@ -419,7 +439,7 @@ class TestBootstrap:
             version = connection.execute(
                 text("SELECT version_num FROM alembic_version")
             ).scalar()
-        assert version == "b3c4d5e6f7a8"
+        assert version == "f3a5c7e9b1d2"
 
     def test_a_fresh_database_is_migrated_and_not_stamped(
         self, db_url, engine, monkeypatch

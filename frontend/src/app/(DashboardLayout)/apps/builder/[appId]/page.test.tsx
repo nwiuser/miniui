@@ -144,6 +144,17 @@ describe('ApplicationBuilderPage', () => {
     expect(pushMock).toHaveBeenCalledWith('/apps/builder/99')
   })
 
+  it('treats a missing appId param as create-mode without fetching', async () => {
+    // '/apps/new' renders this component with no appId route param.
+    paramsMock.mockReturnValue({})
+
+    render(<ApplicationBuilderPage />)
+
+    expect(await screen.findByText(/create new application/i)).toBeInTheDocument()
+    expect(applicationService.getById).not.toHaveBeenCalled()
+    expect(pageService.getByAppId).not.toHaveBeenCalled()
+  })
+
   it('updates an existing application in place', async () => {
     paramsMock.mockReturnValue({ appId: '7' })
     applicationService.getById.mockResolvedValue(APP)

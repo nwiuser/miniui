@@ -87,7 +87,7 @@ export default function NewPageForm() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-4">
-      <div className="flex items-center justify-between bg-white dark:bg-dark-card p-6 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
+      <div className="flex items-center justify-between bg-white dark:bg-darkgray p-6 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
         <div>
           <div className="flex items-center gap-2 text-sm text-gray-500 mb-1">
             <Link href="/" className="hover:underline">Dashboard</Link>
@@ -112,7 +112,7 @@ export default function NewPageForm() {
         </div>
       )}
 
-      <div className="bg-white dark:bg-dark-card p-6 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
+      <div className="bg-white dark:bg-darkgray p-6 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
         <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
           <Icon icon="solar:document-bold" className="text-blue-600" />
           Page Details

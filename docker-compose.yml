@@ -48,7 +48,11 @@ services:
 
   # Frontend service
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        # Baked into the Next.js build (rewrites are resolved at build time).
+        BACKEND_URL: ${BACKEND_URL:-http://backend:8000}
     container_name: apexos_frontend
     restart: unless-stopped
     environment:

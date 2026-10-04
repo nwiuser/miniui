@@ -4,8 +4,7 @@ import { useState, useEffect } from 'react'
 import { useTheme } from 'next-themes'
 import { Icon } from '@iconify/react'
 import Profile from './Profile'
-import Link from 'next/link'
-import Notifications from './Notifications'
+// import Notifications from './Notifications' // commented out: notification bell hidden
 import SidebarLayout from '../sidebar/Sidebar'
 import FullLogo from '../shared/logo/FullLogo'
 import { Input } from '@/components/ui/input'
@@ -40,8 +39,8 @@ const Header = () => {
   return (
     <>
       <header
-        className={`sticky top-0 xl:top-[68px] z-2 ${
-          isSticky ? 'bg-background shadow-md fixed w-full' : 'bg-transparent'
+        className={`sticky top-0 z-10 ${
+          isSticky ? 'bg-background shadow-md' : 'bg-transparent'
         }`}>
         <nav
           className={`rounded-none  py-4 sm:ps-6 max-w-full! sm:pe-10 dark:bg-dark flex justify-between items-center px-6`}>
@@ -77,8 +76,8 @@ const Header = () => {
 
             <div className='xl:block '>
               <div className='flex gap-0 items-center relative'>
-                {/* Chat */}
-                <Notifications />
+                {/* Chat - commented out */}
+                {/* <Notifications /> */}
               </div>
             </div>
 
@@ -106,14 +105,6 @@ const Header = () => {
             </div>
             <div className='flex w-full justify-end items-end'>
               <div className='flex gap-0 items-center '>
-                <div className='relative lg:block hidden group w-fit shadow-grid-shadow bg-[radial-gradient(100%_707.08%_at_0%_0%,#15CEBD_0%,#548AFE_33.82%,#E02FD6_72.12%,#FDB54E_100%)] p-0.5 rounded-full'>
-                  <Link
-                    href={'https://tailwind-admin.com/#pricing'}
-                    className='flex items-center gap-2.5 px-3 py-1.5 bg-background rounded-full transition-all dark:hover:bg-[radial-gradient(100%_707.08%_at_0%_0%,#15CEBD36_0%,#548AFE36_33.82%,#E02FD636_72.12%,#FDB54E36_100%)] group hover:bg-[radial-gradient(100%_707.08%_at_0%_0%,#15CEBD36_0%,#548AFE36_33.82%,#E02FD636_72.12%,#FDB54E36_100%)]'>
-                    <p className='text-base font-semibold'>Check Pro Version</p>
-                  </Link>
-                </div>
-
                 {/* ✅ Dark/Light Toggle */}
                 <div
                   className='hover:text-primary px-15 group focus:ring-0 rounded-full flex justify-center items-center cursor-pointer text-gray relative'
@@ -133,8 +124,8 @@ const Header = () => {
 
                 <div className='xl:block '>
                   <div className='flex gap-0 items-center relative'>
-                    {/* Chat */}
-                    <Notifications />
+                    {/* Chat - commented out */}
+                    {/* <Notifications /> */}
                   </div>
                 </div>
 

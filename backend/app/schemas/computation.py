@@ -16,7 +16,9 @@ class ComputationBase(BaseModel):
 class ComputationCreate(ComputationBase):
     pass
 
-class ComputationUpdate(ComputationBase):
+class ComputationUpdate(BaseModel):
+    # All fields optional: PUT takes the id from the path and crud applies
+    # only the supplied fields (exclude_unset=True).
     page_id: Optional[int] = None
     computation_point: Optional[str] = None
     computation_type: Optional[str] = None

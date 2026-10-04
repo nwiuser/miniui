@@ -17,7 +17,9 @@ class ValidationBase(BaseModel):
 class ValidationCreate(ValidationBase):
     pass
 
-class ValidationUpdate(ValidationBase):
+class ValidationUpdate(BaseModel):
+    # All fields optional: PUT takes the id from the path and crud applies
+    # only the supplied fields (exclude_unset=True).
     page_id: Optional[int] = None
     item_name: Optional[str] = None
     validation_type: Optional[str] = None

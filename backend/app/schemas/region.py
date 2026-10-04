@@ -14,10 +14,11 @@ class RegionBase(BaseModel):
 class RegionCreate(RegionBase):
     pass
 
-class RegionUpdate(RegionBase):
-    id: int
+class RegionUpdate(BaseModel):
+    # All fields optional: PUT takes the id from the path and crud applies
+    # only the supplied fields (exclude_unset=True, excluding "id").
+    page_id: Optional[int] = None
     name: Optional[str] = None
-    alias: Optional[str] = None
     region_type: Optional[str] = None
     template_options: Optional[Any] = None
     position: Optional[int] = None

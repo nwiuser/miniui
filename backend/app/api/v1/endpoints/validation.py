@@ -29,7 +29,6 @@ def read_validations(skip: int = 0, limit: int = 100, db: Session = Depends(get_
     # For END_USER, we need to filter by their application
     if current_user.administrator_role not in ["ADMIN", "DEVELOPER"]:
         # END_USER - get application from their session
-        from .... import crud
         session = crud.get_session_by_user_and_app(db, user_id=current_user.id, is_active=True)  # Simplified
         if not session or not session.application_id:
             return []  # No active session, no access
